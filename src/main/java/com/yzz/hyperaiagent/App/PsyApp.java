@@ -1,19 +1,28 @@
 package com.yzz.hyperaiagent.App;
 
+import com.yzz.hyperaiagent.advisor.MyLoggerAdvisor;
+import com.yzz.hyperaiagent.advisor.ReReadingAdvisor;
+import com.yzz.hyperaiagent.chatmemory.FileBasedChatMemory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Component
 @Slf4j
 public class PsyApp {
 
     private final ChatClient chatClient;
+
+    record PsyReport(String title, List<String> suggestions) {
+    }
 
     private static final String SYSTEM_PROMPT =
             "扮演深耕各年龄段心理健康领域的专业心理咨询师。开场向用户表明身份，告知用户可倾诉任何心理层面的困扰，无需有顾虑。" +
@@ -25,9 +34,12 @@ public class PsyApp {
 
     public PsyApp(ChatModel dashscopeChatModel) {
 
-        ChatMemory chatMemory = MessageWindowChatMemory.builder()
-                .maxMessages(20)
-                .build();
+//        ChatMemory chatMemory = MessageWindowChatMemory.builder()
+//                .maxMessages(20)
+//                .build();
+
+        String fileDir = System.getProperty("user.dir") + "/tmp/chat-memory";
+        ChatMemory chatMemory = new FileBasedChatMemory(fileDir);
 
         MessageChatMemoryAdvisor memoryAdvisor =
                 MessageChatMemoryAdvisor.builder(chatMemory)
@@ -36,7 +48,10 @@ public class PsyApp {
         chatClient = ChatClient.builder(dashscopeChatModel)
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
-                        memoryAdvisor
+                        memoryAdvisor,
+                        // new SimpleLoggerAdvisor();
+                        new MyLoggerAdvisor()
+                        // new ReReadingAdvisor()
                 )
                 .build();
     }
@@ -56,5 +71,16 @@ public class PsyApp {
         String content = chatResponse.getResult().getOutput().getText();
         log.info("content: {}", content);
         return content;
+    }
+
+    public PsyReport doChatWithReport(String message, String chatId) {
+        PsyReport psyReport = chatClient
+                .prompt()
+                .system(SYSTEM_PROMPT + "每次对话后都要生成心理顾问结果，标题为{用户名}的心理顾问报告，内容为建议列表")
+                .user(message)
+                .call()
+                .entity(PsyReport.class);
+        log.info("psyReport: {}", psyReport);
+        return psyReport;
     }
 }
