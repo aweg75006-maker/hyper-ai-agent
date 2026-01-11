@@ -34,4 +34,12 @@ class PsyAppTest {
         PsyApp.PsyReport answer = psyApp.doChatWithReport(message, chatId);
         Assertions.assertNotNull(answer);
     }
+
+    @Test
+    void doChatWithRag() {
+        String chatId = UUID.randomUUID().toString();
+        String message = "你好，我是程序员yzz, 如何拒绝他人不合理要求，又不伤害彼此关系";
+        String answer = psyApp.doChatWithRag(message, chatId);
+        Assertions.assertNotNull(answer);
+    }
 }

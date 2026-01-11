@@ -3,14 +3,18 @@ package com.yzz.hyperaiagent.App;
 import com.yzz.hyperaiagent.advisor.MyLoggerAdvisor;
 import com.yzz.hyperaiagent.advisor.ReReadingAdvisor;
 import com.yzz.hyperaiagent.chatmemory.FileBasedChatMemory;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -63,7 +67,13 @@ public class PsyApp {
                 .user(message)
 //                .advisors(spec -> spec
 //                        .conversationId(chatId)
-//                )
+//                ) 必须要带拦截器独立的chatId，不然会把历史.kryo文件一起发给AI
+                .advisors(advisorSpec -> advisorSpec
+                        .param(
+                                ChatMemory.CONVERSATION_ID,
+                                chatId
+                        )
+                )
                 .call()
                 .chatResponse();
 
@@ -73,6 +83,9 @@ public class PsyApp {
         return content;
     }
 
+    /**
+     * 结构化输出
+     */
     public PsyReport doChatWithReport(String message, String chatId) {
         PsyReport psyReport = chatClient
                 .prompt()
@@ -82,5 +95,38 @@ public class PsyApp {
                 .entity(PsyReport.class);
         log.info("psyReport: {}", psyReport);
         return psyReport;
+    }
+
+    @Resource
+    private VectorStore psyAppVectorStore;
+
+    @Resource
+    private Advisor psyAppRagCloudAdvisor;
+
+    @Resource
+    private VectorStore pgVectorVectorStore;
+
+    public String doChatWithRag(String message, String chatId) {
+
+        ChatResponse chatResponse = chatClient
+                .prompt()
+                .user(message)
+                .advisors(advisorSpec -> advisorSpec
+                        .param(
+                                ChatMemory.CONVERSATION_ID,
+                                chatId
+                        )
+                )
+                .advisors(new MyLoggerAdvisor())
+                .advisors(QuestionAnswerAdvisor.builder(psyAppVectorStore).build())
+//                .advisors(psyAppRagCloudAdvisor)
+//                .advisors(QuestionAnswerAdvisor.builder(pgVectorVectorStore).build())
+                .call()
+                .chatResponse();
+
+        assert chatResponse != null;
+        String content = chatResponse.getResult().getOutput().getText();
+        log.info("content: {}", content);
+        return content;
     }
 }

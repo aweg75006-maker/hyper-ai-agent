@@ -1,6 +1,7 @@
 ### CUSTOM ###
 application-local.yml
 tmp
+src/main/java/com/yzz/hyperaiagent/demo/invoke/TestApiKey.java
 HELP.md
 target/
 .mvn/wrapper/maven-wrapper.jar
