@@ -15,13 +15,13 @@ import java.util.List;
 import static org.springframework.ai.vectorstore.pgvector.PgVectorStore.PgDistanceType.COSINE_DISTANCE;
 import static org.springframework.ai.vectorstore.pgvector.PgVectorStore.PgIndexType.HNSW;
 
-@Configuration
+//@Configuration
 public class PgVectorVectorStoreConfig {
 
     @Resource
     private PsyAppDocumentLoader psyAppDocumentLoader;
 
-    @Bean
+//    @Bean
     public VectorStore pgVectorVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel dashscopeEmbeddingModel) {
         PgVectorStore vectorStore = PgVectorStore.builder(jdbcTemplate, dashscopeEmbeddingModel)
                 .dimensions(1024)                    // DashScope embedding 模型生成的向量维度是1024

@@ -1,5 +1,6 @@
 ### CUSTOM ###
 application-local.yml
+src/main/resources/mcp-servers.json
 tmp
 src/main/java/com/yzz/hyperaiagent/demo/invoke/TestApiKey.java
 HELP.md

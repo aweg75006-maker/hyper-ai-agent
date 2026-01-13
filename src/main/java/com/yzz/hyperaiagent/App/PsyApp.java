@@ -1,23 +1,26 @@
 package com.yzz.hyperaiagent.App;
 
 import com.yzz.hyperaiagent.advisor.MyLoggerAdvisor;
-import com.yzz.hyperaiagent.advisor.ReReadingAdvisor;
 import com.yzz.hyperaiagent.chatmemory.FileBasedChatMemory;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+
+import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY;
+import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY;
 
 @Component
 @Slf4j
@@ -50,7 +53,7 @@ public class PsyApp {
                         .build();
 
         chatClient = ChatClient.builder(dashscopeChatModel)
-                .defaultSystem(SYSTEM_PROMPT)
+//                .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
                         memoryAdvisor,
                         // new SimpleLoggerAdvisor();
@@ -103,8 +106,8 @@ public class PsyApp {
     @Resource
     private Advisor psyAppRagCloudAdvisor;
 
-    @Resource
-    private VectorStore pgVectorVectorStore;
+//    @Resource
+//    private VectorStore pgVectorVectorStore;
 
     public String doChatWithRag(String message, String chatId) {
 
@@ -129,4 +132,42 @@ public class PsyApp {
         log.info("content: {}", content);
         return content;
     }
+
+    // AI 调用工具能力
+    @Resource
+    private ToolCallback[] allTools;
+
+    public String doChatWithTools(String message, String chatId) {
+        ChatResponse chatResponse = chatClient
+                .prompt()
+                .user(message)
+                .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                .advisors(new MyLoggerAdvisor())
+                .toolCallbacks(allTools)
+                .call()
+                .chatResponse();
+        String content = chatResponse.getResult().getOutput().getText();
+        log.info("content: {}", content);
+        return content;
+    }
+
+    @Resource
+    private ToolCallbackProvider toolCallbackProvider; // 加载依赖过后自动注入
+
+    public String doChatWithMcp(String message, String chatId) {
+        ChatResponse chatResponse = chatClient
+                .prompt()
+                .user(message)
+                .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                .advisors(new MyLoggerAdvisor())
+                .toolCallbacks(toolCallbackProvider)
+                .call()
+                .chatResponse();
+        String content = chatResponse.getResult().getOutput().getText();
+        log.info("content: {}", content);
+        return content;
+    }
+
 }
