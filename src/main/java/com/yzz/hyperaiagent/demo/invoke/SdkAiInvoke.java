@@ -27,7 +27,7 @@ public class SdkAiInvoke {
 //                 .apiKey(TestApiKey.API_KEY) // 原始代码里面的sys删掉
                 .apiKey(System.getenv("DASHSCOPE_API_KEY"))
                 // 此处以qwen-plus为例，可按需更换模型名称。模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
-                .model("qwen-plus")
+                .model("qwen-flash")
                 .messages(Arrays.asList(systemMsg, userMsg))
                 .resultFormat(GenerationParam.ResultFormat.MESSAGE)
                 .build();
