@@ -19,4 +19,23 @@ class HyperManusTest {
         String answer = hyperManus.run(userPrompt);
         Assertions.assertNotNull(answer);
     }
+
+    /**
+     * 测试 AskHuman 功能
+     * 这个测试会触发 AI 向用户询问信息
+     *
+     * 注意：这是一个交互式测试，需要手动输入
+     */
+    @Test
+    public void testAskHumanFeature() {
+        String userPrompt = """
+                我想学习编程，但不知道选择哪种语言。
+                请向我询问我的需求和偏好，然后根据我的回答给出建议。
+                """;
+        String answer = hyperManus.run(userPrompt);
+        Assertions.assertNotNull(answer);
+        System.out.println("====================================");
+        System.out.println("最终回答:\n" + answer);
+        System.out.println("====================================");
+    }
 }
