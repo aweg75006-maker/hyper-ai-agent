@@ -30,21 +30,21 @@ export function chatWithPsyAppSse(message, chatId, onMessage, onError, onClose) 
       return
     }
     
-    // 检查连接状态：如果已经接收到数据且连接已关闭，可能是正常关闭
-    // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSED
-    if (eventSource.readyState === EventSource.CLOSED) {
-      // 如果已经接收到数据，可能是正常关闭，不触发错误
-      if (hasReceivedData) {
-        isHandled = true
+    // 如果已经接收到数据，认为连接是正常关闭的
+    // EventSource 在正常关闭时也会触发 onerror 事件
+    if (hasReceivedData) {
+      isHandled = true
+      // 延迟关闭，确保所有数据都已接收
+      setTimeout(() => {
         eventSource.close()
         if (onClose) {
           onClose()
         }
-        return
-      }
+      }, 100)
+      return
     }
     
-    // 只有在真正出错时才调用错误回调
+    // 如果没有接收到任何数据就出错，才是真正的错误
     isHandled = true
     console.error('SSE Error:', error)
     eventSource.close()
@@ -83,21 +83,21 @@ export function chatWithManus(message, onMessage, onError, onClose) {
       return
     }
     
-    // 检查连接状态：如果已经接收到数据且连接已关闭，可能是正常关闭
-    // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSED
-    if (eventSource.readyState === EventSource.CLOSED) {
-      // 如果已经接收到数据，可能是正常关闭，不触发错误
-      if (hasReceivedData) {
-        isHandled = true
+    // 如果已经接收到数据，认为连接是正常关闭的
+    // EventSource 在正常关闭时也会触发 onerror 事件
+    if (hasReceivedData) {
+      isHandled = true
+      // 延迟关闭，确保所有数据都已接收
+      setTimeout(() => {
         eventSource.close()
         if (onClose) {
           onClose()
         }
-        return
-      }
+      }, 100)
+      return
     }
     
-    // 只有在真正出错时才调用错误回调
+    // 如果没有接收到任何数据就出错，才是真正的错误
     isHandled = true
     console.error('SSE Error:', error)
     eventSource.close()
