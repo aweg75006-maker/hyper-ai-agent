@@ -34,6 +34,7 @@ public class FileBasedChatMemory implements ChatMemory {
 
     @Override
     public void add(String conversationId, List<Message> messages) {
+        System.out.println("=== FileBasedChatMemory.add: conversationId = [" + conversationId + "], messages count = " + messages.size() + " ===");
         List<Message> conversationMessages = getOrCreateConversation(conversationId);
         conversationMessages.addAll(messages);
         saveConversation(conversationId, conversationMessages);

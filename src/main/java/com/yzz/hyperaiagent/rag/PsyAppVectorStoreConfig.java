@@ -13,7 +13,7 @@ import java.util.List;
 /**
  * 心理顾问大师向量数据库配置（初始化基于内存的向量数据库 Bean）
  */
-@Configuration
+//@Configuration
 public class PsyAppVectorStoreConfig {
 
     @Resource
