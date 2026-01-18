@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "axios": "^1.6.2",
-    "pdfjs-dist": "^5.4.530",
+    "pdfjs-dist": "^4.4.168",
     "vue": "^3.3.4",
     "vue-router": "^4.2.5"
   },

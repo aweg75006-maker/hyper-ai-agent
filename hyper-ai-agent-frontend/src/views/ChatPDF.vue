@@ -75,17 +75,21 @@
           </div>
           
           <div class="pdf-preview" v-else>
-            <div class="pdf-canvas-container" ref="pdfContainer">
+            <div v-if="totalPages === 0" class="pdf-loading">
+              <div class="loading-spinner"></div>
+              <p>正在加载PDF文档...</p>
+            </div>
+            <div v-else class="pdf-canvas-container" ref="pdfContainer">
               <canvas v-for="page in totalPages" :key="page" :ref="el => pdfCanvases[page-1] = el" class="pdf-canvas"></canvas>
             </div>
-            <div class="pdf-controls">
+            <div class="pdf-controls" v-if="totalPages > 0">
               <button @click="goToPrevPage" :disabled="pdfPage <= 1" class="page-btn">上一页</button>
               <span class="page-info">第 {{ pdfPage }} 页 / 共 {{ totalPages }} 页</span>
               <button @click="goToNextPage" :disabled="pdfPage >= totalPages" class="page-btn">下一页</button>
             </div>
           </div>
         </div>
-        
+
         <!-- 聊天区域 -->
         <div class="chat-section">
           <div class="chat-messages" ref="messagesContainer">
@@ -155,8 +159,8 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { chatWithPdf, uploadPdf, getChatHistoryIds, getChatHistory, generateChatId } from '../utils/api'
 import * as pdfjsLib from 'pdfjs-dist'
 
-// 设置PDF.js工作器
-pdfjsLib.GlobalWorkerOptions.workerSrc = '//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js'
+// 设置PDF.js工作器，使用本地的worker文件
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('../../node_modules/pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href
 
 export default {
   name: 'ChatPDF',
@@ -218,6 +222,24 @@ export default {
         time: new Date(msg.timestamp)
       }))
       
+      // 加载对应会话的PDF
+      pdfUrl.value = `http://localhost:8123/api/ai/pdf/file/${currentChatId.value}`
+      console.log('Loading PDF for chatId:', chatId, 'PDF URL:', pdfUrl.value)
+      
+      // 延迟尝试加载PDF，确保有足够时间
+      setTimeout(async () => {
+        try {
+          await loadPdf()
+        } catch (error) {
+          console.error('Error loading PDF for chat history:', error)
+          // 即使PDF加载失败，也继续显示聊天历史
+          // 重置状态，避免一直显示加载
+          totalPages.value = 0
+          pdfPage.value = 0
+          pdfDocument = null
+        }
+      }, 1000)
+      
       nextTick(() => {
         scrollToBottom()
       })
@@ -278,6 +300,7 @@ export default {
       
       try {
         // 上传文件
+        console.log('Starting to upload file:', file.name, 'size:', file.size)
         const result = await uploadPdf(currentChatId.value, file)
         console.log('Upload result:', result)
         
@@ -288,8 +311,37 @@ export default {
           pdfUrl.value = `http://localhost:8123/api/ai/pdf/file/${currentChatId.value}`
           console.log('PDF URL:', pdfUrl.value)
           
-          // 使用PDF.js加载和显示PDF
-          await loadPdf()
+          // 测试PDF URL是否可访问
+          setTimeout(async () => {
+            try {
+              // 使用GET请求代替HEAD请求，确保测试更加可靠
+              const testResponse = await fetch(pdfUrl.value, { 
+                method: 'GET',
+                headers: {
+                  'Range': 'bytes=0-1023' // 只请求文件的前1024字节，减少网络流量
+                }
+              })
+              console.log('PDF URL test status:', testResponse.status)
+              if (testResponse.ok || testResponse.status === 206) { // 206 Partial Content也是成功
+                console.log('PDF URL is accessible, starting to load PDF')
+                await loadPdf()
+              } else {
+                console.error('PDF URL is not accessible:', testResponse.status)
+                alert('PDF文件尚未准备就绪，请稍后重试！')
+                // 重置状态
+                totalPages.value = 0
+                pdfPage.value = 0
+                pdfDocument = null
+              }
+            } catch (error) {
+              console.error('Error testing PDF URL:', error)
+              alert('无法连接到PDF服务器，请检查网络连接！')
+              // 重置状态
+              totalPages.value = 0
+              pdfPage.value = 0
+              pdfDocument = null
+            }
+          }, 3000)
         } else {
           alert('上传失败：' + (result.msg || '未知错误'))
         }
@@ -301,27 +353,88 @@ export default {
 
     const loadPdf = async () => {
       try {
+        console.log('Starting to load PDF from:', pdfUrl.value)
+        
+        // 重置PDF状态
+        totalPages.value = 0
+        pdfPage.value = 0
+        pdfDocument = null
+        
+        // 测试URL是否可访问
+        try {
+          // 使用GET请求代替HEAD请求，确保测试更加可靠
+          const response = await fetch(pdfUrl.value, { 
+            method: 'GET',
+            headers: {
+              'Range': 'bytes=0-1023' // 只请求文件的前1024字节，减少网络流量
+            },
+            signal: AbortSignal.timeout(10000) // 添加10秒超时
+          })
+          console.log('PDF URL status:', response.status)
+          
+          if (!response.ok && response.status !== 206) { // 206 Partial Content也是成功
+            throw new Error(`PDF URL returned status: ${response.status}`)
+          }
+        } catch (fetchError) {
+          console.error('Fetch error:', fetchError)
+          throw new Error('无法连接到PDF服务器，请检查网络连接')
+        }
+        
         // 从URL加载PDF
-        const loadingTask = pdfjsLib.getDocument(pdfUrl.value)
-        pdfDocument = await loadingTask.promise
+        const loadingTask = pdfjsLib.getDocument({
+          url: pdfUrl.value,
+          cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/cmaps/',
+          cMapPacked: true,
+          disableFontFace: true,
+          renderInteractiveForms: false
+        })
+        
+        // 添加超时处理
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('PDF加载超时')), 30000)
+        })
+        
+        pdfDocument = await Promise.race([loadingTask.promise, timeoutPromise])
         totalPages.value = pdfDocument.numPages
         pdfPage.value = 1
         
+        console.log('PDF loaded successfully. Total pages:', totalPages.value)
+        
         // 渲染第一页
         await renderPage(pdfPage.value)
+        
+        // 标记PDF文件已加载
+        if (pdfFile.value && typeof pdfFile.value.name === 'string' && !pdfFile.value.name.includes('(')) {
+          pdfFile.value = { name: `${pdfFile.value.name} (${totalPages.value} pages)` }
+        }
       } catch (error) {
         console.error('Error loading PDF:', error)
-        alert('加载PDF失败，请重试！')
+        // 重置状态，避免一直显示加载
+        totalPages.value = 0
+        pdfPage.value = 0
+        pdfDocument = null
+        // 显示错误信息
+        alert('加载PDF失败: ' + error.message)
       }
     }
 
     const renderPage = async (pageNum) => {
       try {
+        console.log('Rendering page:', pageNum)
+        
         const page = await pdfDocument.getPage(pageNum)
         const viewport = page.getViewport({ scale: 1.0 })
         
+        // 等待DOM更新，确保canvas元素已创建
+        await nextTick()
+        
         // 设置canvas尺寸
         const canvas = pdfCanvases.value[pageNum - 1]
+        if (!canvas) {
+          console.error('Canvas element not found for page:', pageNum)
+          return
+        }
+        
         const context = canvas.getContext('2d')
         canvas.height = viewport.height
         canvas.width = viewport.width
@@ -331,7 +444,11 @@ export default {
           canvasContext: context,
           viewport: viewport
         }
+        
+        console.log('Rendering page', pageNum, 'to canvas with dimensions:', canvas.width, 'x', canvas.height)
         await page.render(renderContext).promise
+        
+        console.log('Page', pageNum, 'rendered successfully')
         
         // 滚动到当前页面
         if (pdfContainer.value) {
@@ -715,6 +832,36 @@ export default {
   flex-direction: column;
   overflow: hidden;
   position: relative;
+}
+
+.pdf-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #f9f9f9;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.pdf-loading p {
+  color: #666;
+  font-size: 16px;
+  margin: 0;
 }
 
 .pdf-canvas-container {

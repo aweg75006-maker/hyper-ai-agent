@@ -74,16 +74,27 @@ public class PdfController {
             // 3.保存会话id
             chatHistoryRepository.save("pdf", chatId);
 
-            // 4.从向量库检索相关文档
+            // 4.从向量库检索相关文档（先不用过滤，获取更多结果，然后手动过滤）
             SearchRequest searchRequest = SearchRequest.builder()
                     .query(prompt)
-                    .topK(3)  // 获取前3个最相关的文档片段
-                    .similarityThreshold(0.5f)  // 相似度阈值
-                    .filterExpression("file_name == '" + originalFilename + "'")
+                    .topK(10)  // 获取更多结果，然后手动过滤
+                    .similarityThreshold(0.0f)  // 不设置阈值，后续手动过滤
                     .build();
 
-            List<Document> relevantDocs = vectorStore.similaritySearch(searchRequest);
-            log.info("Found {} relevant documents for query", relevantDocs.size());
+            List<Document> allDocs = vectorStore.similaritySearch(searchRequest);
+            log.info("Vector search found {} documents (before filtering)", allDocs.size());
+
+            // 手动过滤：只保留匹配文件名的文档
+            String finalOriginalFilename = originalFilename;
+            List<Document> relevantDocs = allDocs.stream()
+                    .filter(doc -> {
+                        Object fileNameObj = doc.getMetadata().get("file_name");
+                        return fileNameObj != null && fileNameObj.equals(finalOriginalFilename);
+                    })
+                    .limit(3)  // 最多取3个
+                    .toList();
+
+            log.info("After filtering by filename '{}', found {} documents", originalFilename, relevantDocs.size());
 
             // 5.构建包含文档内容的提示词
             String enhancedPrompt;
