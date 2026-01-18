@@ -4,12 +4,10 @@ import com.yzz.hyperaiagent.advisor.MyLoggerAdvisor;
 import com.yzz.hyperaiagent.chatmemory.FileBasedChatMemory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.context.annotation.Bean;
@@ -55,17 +53,11 @@ public class CommonConfiguration {
         return ChatClient
                 .builder(chatModel)
                 .defaultOptions(ChatOptions.builder().model("qwen-flash").build())
-                .defaultSystem("请根据上下文回答问题，遇到上下文没有的问题，不要随意编造。")
+                .defaultSystem("你是一个专业的文档分析助手。请根据提供的文档内容回答用户问题，如果文档中没有相关信息，请明确告诉用户。")
                 .defaultAdvisors(
                         new MyLoggerAdvisor(),
-                        memoryPdfAdvisor,
-                        new QuestionAnswerAdvisor(
-                                vectorStore,
-                                SearchRequest.builder()
-                                        .similarityThreshold(0.6)
-                                        .topK(2)
-                                        .build()
-                        )
+                        memoryPdfAdvisor
+                        // 注意：QuestionAnswerAdvisor 已移除，将在 Controller 中手动实现文档检索
                 )
                 .build();
     }

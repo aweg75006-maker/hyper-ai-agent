@@ -36,6 +36,20 @@
         <h2>AI 聊天助手</h2>
         <p>智能聊天助手，支持多会话管理和历史记录持久化</p>
       </div>
+      
+      <div class="app-card" @click="goToPDF">
+        <div class="app-icon pdf-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" fill="currentColor"/>
+            <polyline points="14 2 14 8 20 8" fill="currentColor"/>
+            <line x1="16" y1="13" x2="8" y2="13" fill="currentColor"/>
+            <line x1="16" y1="17" x2="8" y2="17" fill="currentColor"/>
+            <polyline points="10 9 9 9 8 9" fill="currentColor"/>
+          </svg>
+        </div>
+        <h2>ChatPDF</h2>
+        <p>上传PDF文档，与AI模型对话，获取文档相关信息和分析</p>
+      </div>
     </div>
   </div>
 </template>
@@ -52,6 +66,9 @@ export default {
     },
     goToAssistant() {
       this.$router.push('/assistant')
+    },
+    goToPDF() {
+      this.$router.push('/pdf')
     }
   }
 }
@@ -130,6 +147,10 @@ export default {
 
 .assistant-icon {
   background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.pdf-icon {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
 }
 
 .app-icon svg {

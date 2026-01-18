@@ -3,6 +3,7 @@ import Home from '../views/Home.vue'
 import PsychologyChat from '../views/PsychologyChat.vue'
 import ManusChat from '../views/ManusChat.vue'
 import ChatAssistant from '../views/ChatAssistant.vue'
+import ChatPDF from '../views/ChatPDF.vue'
 
 const routes = [
   {
@@ -24,6 +25,11 @@ const routes = [
     path: '/assistant',
     name: 'ChatAssistant',
     component: ChatAssistant
+  },
+  {
+    path: '/pdf',
+    name: 'ChatPDF',
+    component: ChatPDF
   }
 ]
 

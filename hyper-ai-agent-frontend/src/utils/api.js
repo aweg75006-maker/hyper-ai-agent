@@ -219,3 +219,109 @@ export async function getChatHistory(type, chatId) {
 export function generateChatId() {
   return `chat_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 }
+
+/**
+ * 调用PDF聊天接口
+ * @param {string} message - 用户消息
+ * @param {string} chatId - 聊天室ID
+ * @param {Function} onMessage - 消息回调函数
+ * @param {Function} onError - 错误回调函数
+ * @param {Function} onClose - 正常关闭回调函数
+ */
+export function chatWithPdf(message, chatId, onMessage, onError, onClose) {
+  const url = `${API_BASE_URL}/ai/pdf/chat?prompt=${encodeURIComponent(message)}&chatId=${encodeURIComponent(chatId)}`
+  
+  let controller = new AbortController()
+  let signal = controller.signal
+  let isClosed = false
+  
+  fetch(url, {
+    method: 'GET',
+    signal: signal
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let hasReceivedData = false
+    
+    function read() {
+      return reader.read().then(({ done, value }) => {
+        if (done) {
+          if (hasReceivedData && !isClosed) {
+            isClosed = true
+            if (onClose) {
+              onClose()
+            }
+          }
+          return
+        }
+        
+        const chunk = decoder.decode(value, { stream: true })
+        if (chunk) {
+          hasReceivedData = true
+          onMessage(chunk)
+        }
+        
+        return read()
+      })
+    }
+    
+    return read()
+  })
+  .catch(error => {
+    if (!isClosed && error.name !== 'AbortError') {
+      isClosed = true
+      console.error('Fetch Error:', error)
+      if (onError) {
+        onError(error)
+      }
+    }
+  })
+  
+  // 返回一个对象，包含关闭方法
+  return {
+    close: () => {
+      if (!isClosed) {
+        isClosed = true
+        controller.abort()
+      }
+    }
+  }
+}
+
+/**
+ * 上传PDF文件
+ * @param {string} chatId - 聊天室ID
+ * @param {File} file - PDF文件
+ * @returns {Promise} - 上传结果
+ */
+export async function uploadPdf(chatId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  
+  try {
+    const response = await axios.post(`${API_BASE_URL}/ai/pdf/upload/${chatId}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    console.log('Upload response:', response)
+    return response.data
+  } catch (error) {
+    console.error('Error uploading PDF:', error)
+    throw error
+  }
+}
+
+/**
+ * 下载PDF文件
+ * @param {string} chatId - 聊天室ID
+ */
+export function downloadPdf(chatId) {
+  const url = `${API_BASE_URL}/ai/pdf/file/${chatId}`
+  window.open(url, '_blank')
+}
