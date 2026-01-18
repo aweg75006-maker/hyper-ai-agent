@@ -26,6 +26,16 @@
         <h2>AI 超级智能体</h2>
         <p>强大的AI智能助手，帮您解决各种问题</p>
       </div>
+      
+      <div class="app-card" @click="goToAssistant">
+        <div class="app-icon assistant-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" fill="currentColor"/>
+          </svg>
+        </div>
+        <h2>AI 聊天助手</h2>
+        <p>智能聊天助手，支持多会话管理和历史记录持久化</p>
+      </div>
     </div>
   </div>
 </template>
@@ -39,6 +49,9 @@ export default {
     },
     goToManus() {
       this.$router.push('/manus')
+    },
+    goToAssistant() {
+      this.$router.push('/assistant')
     }
   }
 }
@@ -77,7 +90,7 @@ export default {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 30px;
-  max-width: 800px;
+  max-width: 1000px;
   width: 100%;
 }
 
@@ -113,6 +126,10 @@ export default {
 
 .manus-icon {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.assistant-icon {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
 }
 
 .app-icon svg {

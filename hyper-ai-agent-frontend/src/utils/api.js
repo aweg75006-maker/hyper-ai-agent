@@ -110,6 +110,110 @@ export function chatWithManus(message, onMessage, onError, onClose) {
 }
 
 /**
+ * 调用AI聊天助手接口（使用fetch API代替EventSource）
+ * @param {string} message - 用户消息
+ * @param {string} chatId - 聊天室ID
+ * @param {Function} onMessage - 消息回调函数
+ * @param {Function} onError - 错误回调函数
+ * @param {Function} onClose - 正常关闭回调函数
+ */
+export function chatWithAssistant(message, chatId, onMessage, onError, onClose) {
+  const url = `${API_BASE_URL}/ai/chat?prompt=${encodeURIComponent(message)}&chatId=${encodeURIComponent(chatId)}`
+  
+  let controller = new AbortController()
+  let signal = controller.signal
+  let isClosed = false
+  
+  fetch(url, {
+    method: 'GET',
+    signal: signal
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let hasReceivedData = false
+    
+    function read() {
+      return reader.read().then(({ done, value }) => {
+        if (done) {
+          if (hasReceivedData && !isClosed) {
+            isClosed = true
+            if (onClose) {
+              onClose()
+            }
+          }
+          return
+        }
+        
+        const chunk = decoder.decode(value, { stream: true })
+        if (chunk) {
+          hasReceivedData = true
+          onMessage(chunk)
+        }
+        
+        return read()
+      })
+    }
+    
+    return read()
+  })
+  .catch(error => {
+    if (!isClosed && error.name !== 'AbortError') {
+      isClosed = true
+      console.error('Fetch Error:', error)
+      if (onError) {
+        onError(error)
+      }
+    }
+  })
+  
+  // 返回一个对象，包含关闭方法
+  return {
+    close: () => {
+      if (!isClosed) {
+        isClosed = true
+        controller.abort()
+      }
+    }
+  }
+}
+
+/**
+ * 获取聊天历史ID列表
+ * @param {string} type - 聊天类型
+ * @returns {Promise<Array<string>>} - 聊天ID列表
+ */
+export async function getChatHistoryIds(type) {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/ai/history/${type}`)
+    return response.data
+  } catch (error) {
+    console.error('Error fetching chat history IDs:', error)
+    return []
+  }
+}
+
+/**
+ * 获取聊天历史记录
+ * @param {string} type - 聊天类型
+ * @param {string} chatId - 聊天ID
+ * @returns {Promise<Array>} - 聊天历史记录
+ */
+export async function getChatHistory(type, chatId) {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/ai/history/${type}/${chatId}`)
+    return response.data
+  } catch (error) {
+    console.error('Error fetching chat history:', error)
+    return []
+  }
+}
+
+/**
  * 生成唯一的聊天室ID
  */
 export function generateChatId() {

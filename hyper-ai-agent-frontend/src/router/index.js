@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Home from '../views/Home.vue'
 import PsychologyChat from '../views/PsychologyChat.vue'
 import ManusChat from '../views/ManusChat.vue'
+import ChatAssistant from '../views/ChatAssistant.vue'
 
 const routes = [
   {
@@ -18,6 +19,11 @@ const routes = [
     path: '/manus',
     name: 'ManusChat',
     component: ManusChat
+  },
+  {
+    path: '/assistant',
+    name: 'ChatAssistant',
+    component: ChatAssistant
   }
 ]
 

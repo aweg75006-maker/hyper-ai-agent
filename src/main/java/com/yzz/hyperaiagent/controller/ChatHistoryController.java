@@ -4,7 +4,6 @@ import com.yzz.hyperaiagent.chatmemory.FileBasedChatMemory;
 import com.yzz.hyperaiagent.entity.vo.MessageVO;
 import com.yzz.hyperaiagent.repository.ChatHistoryRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.web.bind.annotation.GetMapping;
