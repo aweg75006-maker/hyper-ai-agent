@@ -2,6 +2,8 @@
 application-local.yml
 src/main/resources/mcp-servers.json
 tmp
+src/main/resources/document
+src/main/resources/document2
 src/main/java/com/yzz/hyperaiagent/demo/invoke/TestApiKey.java
 HELP.md
 target/
