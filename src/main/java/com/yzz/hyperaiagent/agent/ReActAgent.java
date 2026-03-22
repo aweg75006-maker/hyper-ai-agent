@@ -18,6 +18,10 @@ public abstract class ReActAgent extends BaseAgent {
     public abstract boolean think();
     public abstract String act();
 
+    // ReActAgent隐含的默认构造函数
+    public ReActAgent() {
+        super();  // 又会调用BaseAgent的默认构造函数
+    }
 
     @Override
     public String step() {
@@ -30,7 +34,7 @@ public abstract class ReActAgent extends BaseAgent {
             // 再行动
             return act();
         } catch (Exception e) {
-            // 记录异常日志
+            // 记录异常日志 尽量给父类多try catch
             e.printStackTrace();
             return "步骤执行失败：" + e.getMessage();
         }

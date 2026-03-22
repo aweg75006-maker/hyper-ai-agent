@@ -28,7 +28,6 @@ public class MyLoggerAdvisor implements CallAdvisor, StreamAdvisor {
 		return 0;
 	}
 
-
 	@Override
 	public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
 		logRequest(chatClientRequest);

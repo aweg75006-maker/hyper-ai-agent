@@ -57,8 +57,8 @@ public class PsyApp {
 //                .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
                         memoryAdvisor,
-                        // new SimpleLoggerAdvisor();
-                        new MyLoggerAdvisor()
+                        // new SimpleLoggerAdvisor(); // SpringAI 默认的日志
+                        new MyLoggerAdvisor() // 日志级别 0
                         // new ReReadingAdvisor()
                 )
                 .build();
@@ -117,7 +117,7 @@ public class PsyApp {
                 .system(SYSTEM_PROMPT + "每次对话后都要生成心理顾问结果，标题为{用户名}的心理顾问报告，内容为建议列表")
                 .user(message)
                 .call()
-                .entity(PsyReport.class);
+                .entity(PsyReport.class); // 直接转换成 record 这个类里面的对象
         log.info("psyReport: {}", psyReport);
         return psyReport;
     }
@@ -125,8 +125,8 @@ public class PsyApp {
     @Resource
     private VectorStore psyAppVectorStore;
 
-    @Resource
-    private Advisor psyAppRagCloudAdvisor;
+//    @Resource
+//    private Advisor psyAppRagCloudAdvisor;
 
 //    @Resource
 //    private VectorStore pgVectorVectorStore;
@@ -142,6 +142,7 @@ public class PsyApp {
                                 chatId
                         )
                 )
+//                可以 修改 QuestionAnswerAdvisor  为 RetrievalAugmentationAdvisor
                 .advisors(new MyLoggerAdvisor())
                 .advisors(QuestionAnswerAdvisor.builder(psyAppVectorStore).build())
 //                .advisors(psyAppRagCloudAdvisor)

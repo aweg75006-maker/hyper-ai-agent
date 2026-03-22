@@ -6,8 +6,12 @@ src/main/resources/document
 src/main/resources/document2
 src/main/java/com/yzz/hyperaiagent/demo/invoke/TestApiKey.java
 HELP.md
+document
+pdf-files
+AskHumanTool使用说明.md
 target/
 .mvn/wrapper/maven-wrapper.jar
+TestApiKey.java
 !**/src/main/**/target/
 !**/src/test/**/target/
 

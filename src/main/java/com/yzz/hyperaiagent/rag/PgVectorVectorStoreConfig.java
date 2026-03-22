@@ -18,9 +18,9 @@ import static org.springframework.ai.vectorstore.pgvector.PgVectorStore.PgIndexT
 //@Configuration
 public class PgVectorVectorStoreConfig {
 
-    @Resource
-    private PsyAppDocumentLoader psyAppDocumentLoader;
-
+//    @Resource
+//    private PsyAppDocumentLoader psyAppDocumentLoader;
+//
 //    @Bean
     public VectorStore pgVectorVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel dashscopeEmbeddingModel) {
         PgVectorStore vectorStore = PgVectorStore.builder(jdbcTemplate, dashscopeEmbeddingModel)

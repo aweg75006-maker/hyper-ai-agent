@@ -36,19 +36,11 @@ public class AskHumanTool {
             @ToolParam(description = "The question to ask the user. Be specific and clear about what information you need.") String question) {
 
         log.info("AI is asking for human help: {}", question);
-        System.out.println("\n==============================================");
-        System.out.println("🤖 AI需要你的帮助");
-        System.out.println("==============================================");
-        System.out.println("问题: " + question);
-        System.out.println("----------------------------------------------");
-        System.out.print("你的回答: ");
 
         try {
             String userAnswer = scanner.nextLine();
 
             log.info("User provided answer: {}", userAnswer);
-            System.out.println("==============================================");
-            System.out.println();
 
             return "User answered: " + userAnswer;
         } catch (Exception e) {
@@ -71,20 +63,11 @@ public class AskHumanTool {
             @ToolParam(description = "Description of the action that needs confirmation") String action) {
 
         log.info("AI requesting confirmation for: {}", action);
-        System.out.println("\n==============================================");
-        System.out.println("需要确认操作");
-        System.out.println("==============================================");
-        System.out.println("AI准备执行以下操作:");
-        System.out.println(action);
-        System.out.println("----------------------------------------------");
-        System.out.print("是否同意? (yes/no): ");
 
         try {
             String userAnswer = scanner.nextLine().trim().toLowerCase();
 
             log.info("User confirmation: {}", userAnswer);
-            System.out.println("==============================================");
-            System.out.println();
 
             if (userAnswer.equals("yes") || userAnswer.equals("y")) {
                 return "User confirmed: yes";
@@ -115,18 +98,14 @@ public class AskHumanTool {
         log.info("AI presenting options to user: {}", question);
 
         String[] optionArray = options.split(",");
-        for (int i = 0; i < optionArray.length; i++) {
-            System.out.println((i + 1) + ". " + optionArray[i].trim());
-        }
-        System.out.println("----------------------------------------------");
-        System.out.print("请输入选项编号 (1-" + optionArray.length + "): ");
+//        for (int i = 0; i < optionArray.length; i++) {
+//            System.out.println((i + 1) + ". " + optionArray[i].trim());
+//        }
 
         try {
             String userAnswer = scanner.nextLine().trim();
 
             log.info("User selected option: {}", userAnswer);
-            System.out.println("==============================================");
-            System.out.println();
 
             int selectedIndex = Integer.parseInt(userAnswer) - 1;
             if (selectedIndex >= 0 && selectedIndex < optionArray.length) {

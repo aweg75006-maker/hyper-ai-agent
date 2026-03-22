@@ -259,7 +259,7 @@ public abstract class BaseAgent {
         if (this.nextStepPrompt != null) {
             this.nextStepPrompt = this.nextPrompt;
         }
-        System.out.println("Agent detected stuck state. Added prompt: " + stuckPrompt);
+//        System.out.println("Agent detected stuck state. Added prompt: " + stuckPrompt);
         log.warn("Agent detected stuck state. Added prompt: {}", stuckPrompt);
     }
 }

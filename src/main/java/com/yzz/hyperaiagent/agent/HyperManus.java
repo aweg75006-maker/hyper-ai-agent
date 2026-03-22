@@ -6,6 +6,10 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
 
+/**
+ * agent 支持自主规划能力
+ *
+ */
 @Component
 public class HyperManus extends ToolCallAgent{
 
@@ -39,7 +43,7 @@ public class HyperManus extends ToolCallAgent{
                 If you want to stop the interaction at any point, use the `terminate` tool/function call.
                 """;
         this.setNextStepPrompt(NEXT_STEP_PROMPT);
-        this.setMaxSteps(20);
+        this.setMaxSteps(20); // 父类支持 get set 方法
 
         // 初始化 AI 对话客户端
         ChatClient chatClient = ChatClient.builder(dashScopeChatModel)

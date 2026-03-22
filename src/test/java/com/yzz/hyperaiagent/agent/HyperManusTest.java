@@ -23,7 +23,6 @@ class HyperManusTest {
     /**
      * 测试 AskHuman 功能
      * 这个测试会触发 AI 向用户询问信息
-     *
      * 注意：这是一个交互式测试，需要手动输入
      */
     @Test
@@ -34,8 +33,5 @@ class HyperManusTest {
                 """;
         String answer = hyperManus.run(userPrompt);
         Assertions.assertNotNull(answer);
-        System.out.println("====================================");
-        System.out.println("最终回答:\n" + answer);
-        System.out.println("====================================");
     }
 }

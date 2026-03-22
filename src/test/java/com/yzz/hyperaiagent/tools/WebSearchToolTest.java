@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 class WebSearchToolTest {
 
+    // 需要加载配置文件 application-local.yml 必须打上 @SpringBootTest
     @Value("${search-api.api-key}")
     private String searchApiKey;
 

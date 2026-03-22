@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ToolCallAgent extends ReActAgent {
 
-    // 可用的工具
+    // 可用的工具 SpringAI 的工具对象
     private final ToolCallback[] availableTools;
 
     // 保存工具调用信息的响应结果（要调用那些工具）
@@ -40,7 +40,7 @@ public class ToolCallAgent extends ReActAgent {
     private final ChatOptions chatOptions;
 
     public ToolCallAgent(ToolCallback[] availableTools) {
-        super();
+        super();  // super() 会触发整个继承链的初始化
         this.availableTools = availableTools;
         this.toolCallingManager = ToolCallingManager.builder().build();
         this.chatOptions = DashScopeChatOptions.builder()

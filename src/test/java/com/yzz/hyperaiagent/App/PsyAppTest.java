@@ -10,7 +10,8 @@ import java.util.UUID;
 @SpringBootTest
 class PsyAppTest {
 
-    @Resource PsyApp psyApp;
+    @Resource
+    private PsyApp psyApp;
 
     @Test
     void testChat() {
