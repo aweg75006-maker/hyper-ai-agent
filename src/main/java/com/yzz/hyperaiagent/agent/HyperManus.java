@@ -1,8 +1,8 @@
 package com.yzz.hyperaiagent.agent;
 
 import com.yzz.hyperaiagent.advisor.MyLoggerAdvisor;
+import com.yzz.hyperaiagent.gateway.application.GatewayChatModelFactory;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
 
@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 public class HyperManus extends ToolCallAgent{
 
     // 构造方法 非成员方法
-    public HyperManus(ToolCallback[] availableTools, ChatModel dashScopeChatModel) {
+    public HyperManus(ToolCallback[] availableTools, GatewayChatModelFactory gatewayChatModelFactory) {
         super(availableTools);
         this.setName("hyperManus");
         String SYSTEM_PROMPT =  """
@@ -46,7 +46,7 @@ public class HyperManus extends ToolCallAgent{
         this.setMaxSteps(20); // 父类支持 get set 方法
 
         // 初始化 AI 对话客户端
-        ChatClient chatClient = ChatClient.builder(dashScopeChatModel)
+        ChatClient chatClient = ChatClient.builder(gatewayChatModelFactory.create("agent-tool-calling"))
                 .defaultAdvisors(new MyLoggerAdvisor())
                 .build();
         this.setChatClient(chatClient);

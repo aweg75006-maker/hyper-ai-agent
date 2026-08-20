@@ -6,6 +6,16 @@ spring:
     import: optional:file:./.env[.properties]
   profiles:
     active: local
+  flyway:
+    # 旧项目已经存在 pgvector 等业务表，从 0 建立基线后只管理新增的 Gateway 表。
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
+  ai:
+    # Spring AI Alibaba 1.1.x 要求显式选择自动配置的模型 Provider。
+    model:
+      chat: dashscope
+      embedding: dashscope
 #  ai:
 #    ollama:
 #      base-url: http://localhost:11434
@@ -15,6 +25,29 @@ server:
   port: 8123
   servlet:
     context-path: /api
+
+ai:
+  gateway:
+    # 本地开发允许不携带 Gateway Key；非 local 环境会由代码强制关闭该能力。
+    allow-anonymous-local: true
+    default-consumer-id: local-system
+    default-requests-per-minute: 60
+    default-max-concurrent-requests: 8
+    default-output-token-reservation: 1024
+    provider-bulkhead-max-concurrent-calls: 8
+    provider-circuit-breaker-minimum-calls: 5
+    provider-circuit-breaker-failure-rate-threshold: 50.0
+    provider-circuit-breaker-open-duration: 30s
+    max-message-count: 50
+    max-message-length: 20000
+    max-output-tokens: 8192
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 仅开放无敏感正文的运行指标；Gateway 明细仍通过受保护的管理 API 查询。
+        include: health,info,metrics
 # springdoc-openapi config
 springdoc:
   swagger-ui:

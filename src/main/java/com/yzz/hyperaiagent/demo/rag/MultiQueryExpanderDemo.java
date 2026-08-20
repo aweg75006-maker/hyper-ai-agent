@@ -1,7 +1,7 @@
 package com.yzz.hyperaiagent.demo.rag;
 
+import com.yzz.hyperaiagent.gateway.application.GatewayChatModelFactory;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.preretrieval.query.expansion.MultiQueryExpander;
 import org.springframework.stereotype.Component;
@@ -13,8 +13,8 @@ public class MultiQueryExpanderDemo {
 
     private final ChatClient.Builder chatClientBuilder;
 
-    public MultiQueryExpanderDemo(ChatModel dashScopeChatModel) {
-        this.chatClientBuilder = ChatClient.builder(dashScopeChatModel);
+    public MultiQueryExpanderDemo(GatewayChatModelFactory gatewayChatModelFactory) {
+        this.chatClientBuilder = ChatClient.builder(gatewayChatModelFactory.create("pdf-rag"));
     }
 
     public List<Query> expand(String query) {

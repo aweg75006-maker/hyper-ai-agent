@@ -2,8 +2,8 @@ package com.yzz.hyperaiagent.controller;
 
 import com.yzz.hyperaiagent.App.PsyApp;
 import com.yzz.hyperaiagent.agent.HyperManus;
+import com.yzz.hyperaiagent.gateway.application.GatewayChatModelFactory;
 import jakarta.annotation.Resource;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -24,7 +24,7 @@ public class AiController {
     private ToolCallback[] allTools;
 
     @Resource
-    private ChatModel dashscopeChatModel;
+    private GatewayChatModelFactory gatewayChatModelFactory;
 
     /**
      * 同步调用 AI 心理咨询大师应用
@@ -96,7 +96,8 @@ public class AiController {
      */
     @GetMapping("/manus/chat")
     public SseEmitter doChatWithManus(String message) {
-        HyperManus hyperManus = new HyperManus(allTools, dashscopeChatModel);
+        // 每次请求创建独立 Agent 状态，但模型选择统一经过 agent-tool-calling 路由。
+        HyperManus hyperManus = new HyperManus(allTools, gatewayChatModelFactory);
         return hyperManus.runStream(message);
     }
 }

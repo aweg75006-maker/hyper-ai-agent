@@ -2,6 +2,7 @@ package com.yzz.hyperaiagent.App;
 
 import com.yzz.hyperaiagent.advisor.MyLoggerAdvisor;
 import com.yzz.hyperaiagent.chatmemory.FileBasedChatMemory;
+import com.yzz.hyperaiagent.gateway.application.GatewayChatModelFactory;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -9,7 +10,6 @@ import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
@@ -19,9 +19,6 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
-
-import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY;
-import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY;
 
 @Component
 @Slf4j
@@ -40,7 +37,7 @@ public class PsyApp {
             "老年阶段关注孤独感、健康焦虑、生活适应及亲属关系处理的问题。" +
             "引导用户详述事情的完整经过、自身的情绪感受、相关人员的反应及内心真实想法，以便结合专业心理学知识给出贴合其年龄特点和具体情况的专属解决方案。";
 
-    public PsyApp(ChatModel dashscopeChatModel) {
+    public PsyApp(GatewayChatModelFactory gatewayChatModelFactory) {
 
 //        ChatMemory chatMemory = MessageWindowChatMemory.builder()
 //                .maxMessages(20)
@@ -53,7 +50,8 @@ public class PsyApp {
                 MessageChatMemoryAdvisor.builder(chatMemory)
                         .build();
 
-        chatClient = ChatClient.builder(dashscopeChatModel)
+        // 心理咨询使用独立路由，可与通用聊天配置不同的主模型和 Fallback 顺序。
+        chatClient = ChatClient.builder(gatewayChatModelFactory.create("psychology-chat"))
 //                .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
                         memoryAdvisor,
@@ -164,8 +162,8 @@ public class PsyApp {
         ChatResponse chatResponse = chatClient
                 .prompt()
                 .user(message)
-                .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                // Spring AI 1.1.x 将会话参数统一收口到 ChatMemory，避免依赖已移除的 Advisor 内部常量。
+                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, chatId))
                 .advisors(new MyLoggerAdvisor())
                 .toolCallbacks(allTools)
                 .call()
@@ -182,8 +180,8 @@ public class PsyApp {
         ChatResponse chatResponse = chatClient
                 .prompt()
                 .user(message)
-                .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                // 检索窗口由 ChatMemory 实现自身负责，调用方只传递稳定的会话标识。
+                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, chatId))
                 .advisors(new MyLoggerAdvisor())
                 .toolCallbacks(toolCallbackProvider)
                 .call()

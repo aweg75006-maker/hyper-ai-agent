@@ -7,6 +7,7 @@ import com.yzz.hyperaiagent.repository.LocalPdfFileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.ExtractedTextFormatter;
 import org.springframework.ai.reader.pdf.PagePdfDocumentReader;
@@ -27,8 +28,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
-import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -122,7 +121,8 @@ public class PdfController {
             // 6.请求模型（使用增强后的提示词）
             return pdfChatClient.prompt()
                     .user(enhancedPrompt)
-                    .advisors(a -> a.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId))
+                    // 使用 Spring AI 公共 ChatMemory 契约传递会话 ID，避免耦合 Advisor 的内部实现。
+                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId))
                     .stream()
                     .content();
         } catch (Exception e) {
