@@ -144,9 +144,37 @@ class ToolCallAgentRuntimeTest {
         assertFalse(finalEvent.summary().contains("下一步准备"));
     }
 
+    @Test
+    void maxStepsShouldGenerateFinalDeliverableFromExistingResults() {
+        TestableToolCallAgent agent = new TestableToolCallAgent(ToolCallbacks.from(new TerminateTool()));
+        agent.keepRunningAtStepLimit = true;
+        agent.generatedFinalAnswer = "根据现有搜索结果，建议上午游览断桥、白堤与曲院风荷，并预留返程时间。";
+        agent.setMaxSteps(1);
+        List<AgentRunEvent> events = new ArrayList<>();
+
+        AgentState result = agent.startInteractive(
+                "制定西湖游览攻略",
+                new AgentRunContext("run_max_steps_test", new AtomicBoolean(false), events::add)
+        );
+
+        assertEquals(AgentState.FINISHED, result);
+        assertTrue(agent.finalizerCalled);
+        AgentRunEvent finalEvent = events.stream()
+                .filter(event -> event.type() == AgentRunEventType.FINAL_SUMMARY)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(agent.generatedFinalAnswer, finalEvent.summary());
+        assertEquals("MAX_STEPS", finalEvent.data().get("reason"));
+        assertTrue(events.stream().anyMatch(event ->
+                event.type() == AgentRunEventType.RUN_COMPLETED
+                        && "MAX_STEPS".equals(event.data().get("reason"))
+        ));
+    }
+
     private static final class TestableToolCallAgent extends ToolCallAgent {
 
         private boolean finalizerCalled;
+        private boolean keepRunningAtStepLimit;
         private String generatedFinalAnswer = "任务已结束。";
 
         private TestableToolCallAgent(ToolCallback[] availableTools) {
@@ -161,6 +189,15 @@ class ToolCallAgentRuntimeTest {
         protected String generateFinalAnswer() {
             this.finalizerCalled = true;
             return this.generatedFinalAnswer;
+        }
+
+        @Override
+        public String step() {
+            if (keepRunningAtStepLimit) {
+                // 模拟最后一步仍执行了工具且保持 RUNNING，触发最大步骤数收束路径。
+                return "最后一个工具已执行完成";
+            }
+            return super.step();
         }
     }
 }

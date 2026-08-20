@@ -168,11 +168,14 @@ public abstract class BaseAgent {
             }
 
             if (state == AgentState.RUNNING && currentStep >= maxSteps) {
+                // 达到上限只代表不再继续调用工具，不代表可以丢弃已经获得的结果。
+                // 具体 Agent 可在这里基于现有上下文生成一次最终交付内容。
+                onMaxStepsReached();
                 state = AgentState.FINISHED;
                 publishEvent(
                         AgentRunEventType.RUN_COMPLETED,
                         "达到步骤上限",
-                        "任务已在最大步骤数 " + maxSteps + " 处结束。",
+                        "任务已达到最大步骤数 " + maxSteps + "，并基于现有结果完成收束。",
                         Map.of("reason", "MAX_STEPS")
                 );
             } else if (state == AgentState.FINISHED) {
@@ -210,6 +213,16 @@ public abstract class BaseAgent {
     /** 子类可覆盖该方法，把人工回答接回暂停前的工具调用协议。 */
     protected void acceptHumanResponse(String humanAnswer) {
         this.messageList.add(new UserMessage(humanAnswer));
+    }
+
+    /**
+     * 达到最大迭代次数后的收束钩子。
+     *
+     * <p>基础实现不做额外处理；具备模型能力的子类可覆盖它生成最终答案，
+     * 防止把最后一步的“准备调用工具”误当成最终结论。</p>
+     */
+    protected void onMaxStepsReached() {
+        // 默认 Agent 不一定具备生成最终答案的能力，因此保留空实现。
     }
 
     /** 由运行服务和执行循环共同使用的统一取消入口。 */

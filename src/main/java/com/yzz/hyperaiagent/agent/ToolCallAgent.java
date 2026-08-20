@@ -335,7 +335,7 @@ public class ToolCallAgent extends ReActAgent {
         publishFinalSummary(reason, null);
     }
 
-    private void publishFinalSummary(String reason, String explicitFinalAnswer) {
+    protected void publishFinalSummary(String reason, String explicitFinalAnswer) {
         if (finalSummaryPublished) {
             return;
         }
@@ -357,6 +357,16 @@ public class ToolCallAgent extends ReActAgent {
                 Map.of("reason", reason)
         );
         finalSummaryPublished = true;
+    }
+
+    /**
+     * 达到 ReAct 步骤上限时，最后一步通常仍停留在工具结果或“准备继续”的阶段小结。
+     * 此时禁止继续注册工具，只基于已有上下文生成可直接交付的最终答案。
+     */
+    @Override
+    protected void onMaxStepsReached() {
+        String finalAnswer = generateFinalAnswer();
+        publishFinalSummary("MAX_STEPS", finalAnswer);
     }
 
     /**

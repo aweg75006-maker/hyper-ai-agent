@@ -566,9 +566,12 @@ export default {
       })
 
       activeRunId = createRunId()
-      activeRunMessage = createRunMessage(activeRunId)
+      const runMessage = createRunMessage(activeRunId)
       eventPlaybackQueue = Promise.resolve()
-      messages.value.push(activeRunMessage)
+      messages.value.push(runMessage)
+      // Vue 会在对象进入响应式数组后创建代理。后续 SSE 事件必须修改这个代理对象，
+      // 如果继续持有 push 前的原始对象，数据虽已到达但页面只会在结束时一次性重绘。
+      activeRunMessage = messages.value.at(-1)
       askHumanQuestion.value = ''
       scrollToBottom()
 
