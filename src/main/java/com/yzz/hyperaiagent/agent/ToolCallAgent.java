@@ -56,6 +56,12 @@ public class ToolCallAgent extends ReActAgent {
     /** 暂停时保存原始工具调用，收到回答后按标准 ToolResponseMessage 协议续跑。 */
     private PendingHumanToolCall pendingHumanToolCall;
 
+    /** 保存最近一次模型明确输出的小结，正常结束时提升为独立的最终结论事件。 */
+    private String latestModelSummary;
+
+    /** 防止“无工具直接完成”和 doTerminate 两条结束路径重复发布最终结论。 */
+    private boolean finalSummaryPublished;
+
     public ToolCallAgent(ToolCallback[] availableTools) {
         super();  // super() 会触发整个继承链的初始化
         this.availableTools = availableTools;
@@ -92,6 +98,9 @@ public class ToolCallAgent extends ReActAgent {
             List<AssistantMessage.ToolCall> toolCallList = assistantMessage.getToolCalls();
 
             String result = assistantMessage.getText();
+            if (StrUtil.isNotBlank(result)) {
+                this.latestModelSummary = result;
+            }
             log.info("{}的思考：{}", getName(), result);
             log.info("{}选择了 {} 个工具来使用", getName(), toolCallList.size());
             String toolCallInfo = toolCallList.stream()
@@ -122,6 +131,8 @@ public class ToolCallAgent extends ReActAgent {
 
             if (toolCallList.isEmpty()) {
                 getMessageList().add(assistantMessage); // 自己管理chatOptions
+                // 模型未调用工具且直接给出答案时，这段答案就是本次运行的整体结论。
+                publishFinalSummary("MODEL_FINAL_RESPONSE");
                 return false;
             } else {
                 return true;
@@ -145,6 +156,7 @@ public class ToolCallAgent extends ReActAgent {
         }
 
         AssistantMessage assistantMessage = toolCallChatResponse.getResult().getOutput();
+        String terminateFinalSummary = terminateFinalSummary(assistantMessage);
         AssistantMessage.ToolCall humanToolCall = assistantMessage.getToolCalls().stream()
                 .filter(toolCall -> HUMAN_INTERACTION_TOOLS.contains(toolCall.name()))
                 .findFirst()
@@ -164,9 +176,6 @@ public class ToolCallAgent extends ReActAgent {
 
             boolean terminateToolCalled = toolResponseMessage.getResponses().stream()
                     .anyMatch(response -> response.name().equals("doTerminate"));
-            if (terminateToolCalled) {
-                setState(AgentState.FINISHED);
-            }
 
             String results = toolResponseMessage.getResponses().stream()
                     .map(response -> "工具 " + response.name() + " 返回的结果：" + response.responseData())
@@ -182,6 +191,11 @@ public class ToolCallAgent extends ReActAgent {
                         "工具执行完成，结果已回填到 Agent 上下文。",
                         resultData
                 );
+            }
+            if (terminateToolCalled) {
+                // doTerminate 只是生命周期工具；真正给用户看的结果来自模型调用工具前的中文总结。
+                publishFinalSummary("TERMINATE_TOOL_CALLED", terminateFinalSummary);
+                setState(AgentState.FINISHED);
             }
             log.info(results);
             return results;
@@ -287,6 +301,52 @@ public class ToolCallAgent extends ReActAgent {
     private String argumentText(Map<?, ?> arguments, String key, String fallback) {
         Object value = arguments.get(key);
         return value == null ? fallback : String.valueOf(value);
+    }
+
+    /**
+     * 发布独立的最终结论事件，前端会将其固定展示在步骤列表之外。
+     */
+    private void publishFinalSummary(String reason) {
+        publishFinalSummary(reason, null);
+    }
+
+    private void publishFinalSummary(String reason, String structuredSummary) {
+        if (finalSummaryPublished) {
+            return;
+        }
+        String summary;
+        if (StrUtil.isNotBlank(structuredSummary)) {
+            // 正常结束时，以 doTerminate.finalSummary 这份结构化数据为权威结果。
+            summary = structuredSummary;
+        } else if (StrUtil.isNotBlank(latestModelSummary)) {
+            // 模型没有调用工具、直接回答时，正文就是本次运行的最终结论。
+            summary = latestModelSummary;
+        } else {
+            // 极端异常下仍保证事件协议完整，避免前端出现“完成但没有结论”的空卡片。
+            summary = "任务已完成，所有计划步骤均已执行结束。";
+        }
+        publishEvent(
+                AgentRunEventType.FINAL_SUMMARY,
+                "最终结论",
+                summary,
+                Map.of("reason", reason)
+        );
+        finalSummaryPublished = true;
+    }
+
+    /**
+     * 从 doTerminate 的结构化参数中读取最终结论，避免把普通阶段计划误当成整体结果。
+     */
+    private String terminateFinalSummary(AssistantMessage assistantMessage) {
+        return assistantMessage.getToolCalls().stream()
+                .filter(toolCall -> "doTerminate".equals(toolCall.name()))
+                .map(AssistantMessage.ToolCall::arguments)
+                .map(this::parseArguments)
+                .filter(arguments -> arguments instanceof Map<?, ?>)
+                .map(arguments -> argumentText((Map<?, ?>) arguments, "finalSummary", null))
+                .filter(StrUtil::isNotBlank)
+                .findFirst()
+                .orElse(null);
     }
 
     private record PendingHumanToolCall(String id, String name, String question) {

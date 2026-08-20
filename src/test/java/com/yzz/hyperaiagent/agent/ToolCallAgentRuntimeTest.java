@@ -1,10 +1,13 @@
 package com.yzz.hyperaiagent.agent;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yzz.hyperaiagent.agent.model.AgentState;
 import com.yzz.hyperaiagent.agent.runtime.AgentRunContext;
 import com.yzz.hyperaiagent.agent.runtime.AgentRunEvent;
 import com.yzz.hyperaiagent.agent.runtime.AgentRunEventType;
 import com.yzz.hyperaiagent.tools.AskHumanTool;
+import com.yzz.hyperaiagent.tools.TerminateTool;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -22,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ToolCallAgentRuntimeTest {
 
@@ -86,6 +90,23 @@ class ToolCallAgentRuntimeTest {
         assertEquals("call-1", responseMessage.getResponses().getFirst().id());
         assertEquals("askHuman", responseMessage.getResponses().getFirst().name());
         assertEquals("后端方向", responseMessage.getResponses().getFirst().responseData());
+    }
+
+    @Test
+    void terminateToolShouldRequireStructuredFinalSummary() throws Exception {
+        ToolCallback terminateCallback = ToolCallbacks.from(new TerminateTool())[0];
+        String inputSchema = terminateCallback.getToolDefinition().inputSchema();
+        JsonNode schema = new ObjectMapper().readTree(inputSchema);
+
+        // 最终结论必须成为工具协议的必填参数，不能只依赖模型自觉遵守提示词。
+        assertTrue(schema.path("properties").has("finalSummary"));
+        assertTrue(schema.path("required").isArray());
+        assertEquals("finalSummary", schema.path("required").get(0).asText());
+
+        String result = terminateCallback.call("""
+                {"finalSummary":"已完成三点 Java 后端学习总结。"}
+                """);
+        assertEquals("任务结束，最终结论已提交", new ObjectMapper().readTree(result).asText());
     }
 
     private static final class TestableToolCallAgent extends ToolCallAgent {

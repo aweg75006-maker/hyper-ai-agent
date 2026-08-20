@@ -22,16 +22,11 @@ public class AskHumanTool {
      * @return 用户的回答
      */
     @Tool(description = """
-            Ask the human user for help when you cannot complete a task independently.
-            Use this tool when you need additional information, clarification, or input from the user.
-            Examples:
-            - When you need user preferences or choices
-            - When you need confirmation before proceeding
-            - When you lack necessary information to complete a task
-            - When you need the user to provide specific data or credentials
+            当任务无法独立完成，需要用户补充信息、澄清需求或表达偏好时向用户提问。
+            问题必须具体、清晰，并且必须使用简体中文。
             """)
     public String askHuman(
-            @ToolParam(description = "The question to ask the user. Be specific and clear about what information you need.") String question) {
+            @ToolParam(description = "需要询问用户的中文问题，必须明确说明需要补充什么信息") String question) {
 
         log.info("AI is asking for human help: {}", question);
 
@@ -46,11 +41,11 @@ public class AskHumanTool {
      * @return 用户的确认（yes/no）
      */
     @Tool(description = """
-            Ask the user for confirmation before proceeding with an action.
-            Use this when you need explicit user permission to perform sensitive or impactful operations.
+            在执行敏感操作或有明显影响的操作前，请求用户明确确认。
+            操作描述和确认问题必须使用简体中文。
             """)
     public String confirmAction(
-            @ToolParam(description = "Description of the action that needs confirmation") String action) {
+            @ToolParam(description = "需要用户确认的中文操作描述") String action) {
 
         log.info("AI requesting confirmation for: {}", action);
 
@@ -66,12 +61,12 @@ public class AskHumanTool {
      * @return 用户选择的选项
      */
     @Tool(description = """
-            Present multiple choices to the user and ask them to select one.
-            Use this when there are multiple valid approaches and user preference matters.
+            当存在多个有效方案并需要尊重用户偏好时，向用户展示选项并请求选择。
+            问题和所有选项必须使用简体中文。
             """)
     public String selectOption(
-            @ToolParam(description = "The question or context for the selection") String question,
-            @ToolParam(description = "Available options separated by commas. Example: 'option 1, option 2, option 3'") String options) {
+            @ToolParam(description = "需要用户选择的中文问题或上下文") String question,
+            @ToolParam(description = "使用逗号分隔的中文选项，例如：方案一, 方案二, 方案三") String options) {
 
         log.info("AI presenting options to user: {}", question);
 

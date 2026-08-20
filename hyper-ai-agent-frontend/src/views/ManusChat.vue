@@ -50,9 +50,22 @@
                   <span class="agent-run-label">RUN {{ shortRunId(message.runId) }}</span>
                   <h3>任务执行过程</h3>
                 </div>
-                <span :class="['run-status', `status-${message.status.toLowerCase()}`]">
-                  <i></i>{{ statusText(message.status) }}
-                </span>
+                <div class="agent-run-header-actions">
+                  <button
+                    v-if="message.summaries.length || message.toolCalls.length || message.humanReplies.length"
+                    type="button"
+                    class="collapse-all-btn"
+                    @click="toggleAllDetails(message)"
+                  >
+                    {{ isAllCollapsed(message) ? '展开步骤' : '折叠步骤' }}
+                    <svg :class="{ collapsed: isAllCollapsed(message) }" viewBox="0 0 20 20" fill="none">
+                      <path d="m6 8 4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <span :class="['run-status', `status-${message.status.toLowerCase()}`]">
+                    <i></i>{{ statusText(message.status) }}
+                  </span>
+                </div>
               </header>
 
               <!-- 第一部分：只呈现可观察的分析进度，不暴露模型内部隐藏思维链。 -->
@@ -84,8 +97,16 @@
                 </div>
                 <div v-if="message.summaries.length" class="summary-list">
                   <div v-for="(summary, index) in message.summaries" :key="`${summary.step}-${index}`" class="summary-item">
-                    <span>STEP {{ summary.step }}</span>
-                    <p>{{ summary.text }}</p>
+                    <button type="button" class="detail-toggle" @click="summary.expanded = !summary.expanded">
+                      <span>步骤 {{ summary.step }}</span>
+                      <span class="detail-toggle-action">
+                        {{ summary.expanded ? '收起' : '展开' }}
+                        <svg :class="{ collapsed: !summary.expanded }" viewBox="0 0 20 20" fill="none">
+                          <path d="m6 8 4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </span>
+                    </button>
+                    <p v-show="summary.expanded">{{ summary.text }}</p>
                   </div>
                 </div>
                 <p v-else class="section-empty">模型完成当前分析后，小结会显示在这里。</p>
@@ -102,18 +123,37 @@
                 </div>
                 <div v-if="message.toolCalls.length" class="tool-call-list">
                   <div v-for="toolCall in message.toolCalls" :key="toolCall.key" class="tool-call-card">
-                    <div class="tool-call-meta">
-                      <strong>{{ toolCall.name }}</strong>
-                      <span>STEP {{ toolCall.step }}</span>
-                    </div>
-                    <pre>{{ formatJson(toolCall.data) }}</pre>
-                    <div v-if="toolCall.result" class="tool-result">
-                      <span>工具返回</span>
-                      <pre>{{ formatJson(toolCall.result) }}</pre>
+                    <button type="button" class="tool-call-meta" @click="toolCall.expanded = !toolCall.expanded">
+                      <strong>{{ toolDisplayName(toolCall.name) }}</strong>
+                      <span class="tool-call-step">
+                        步骤 {{ toolCall.step }} · {{ toolCall.expanded ? '收起' : '展开' }}
+                        <svg :class="{ collapsed: !toolCall.expanded }" viewBox="0 0 20 20" fill="none">
+                          <path d="m6 8 4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </span>
+                    </button>
+                    <div v-show="toolCall.expanded">
+                      <pre>{{ formatJson(toolCall.data) }}</pre>
+                      <div v-if="toolCall.result" class="tool-result">
+                        <span>工具返回</span>
+                        <pre>{{ formatJson(toolCall.result) }}</pre>
+                      </div>
                     </div>
                   </div>
                 </div>
                 <p v-else class="section-empty">当前尚未产生工具调用。</p>
+              </section>
+
+              <!-- 最终结论独立于步骤列表，正常完成后始终优先展示整体结果。 -->
+              <section v-if="message.finalSummary" class="final-summary-section">
+                <div class="final-summary-heading">
+                  <span>完成</span>
+                  <div>
+                    <h4>最终结论</h4>
+                    <p>任务智能体对本次运行的整体总结</p>
+                  </div>
+                </div>
+                <div class="final-summary-content">{{ message.finalSummary }}</div>
               </section>
 
               <div v-if="message.error" class="run-error" role="alert">
@@ -122,13 +162,23 @@
               </div>
 
               <div v-if="message.humanReplies.length" class="human-reply-history">
-                <span>人工回复</span>
-                <p v-for="(reply, index) in message.humanReplies" :key="index">{{ reply }}</p>
+                <button type="button" class="human-reply-toggle" @click="message.humanRepliesExpanded = !message.humanRepliesExpanded">
+                  <span>人工回复 · {{ message.humanReplies.length }} 条</span>
+                  <span>
+                    {{ message.humanRepliesExpanded ? '收起' : '展开' }}
+                    <svg :class="{ collapsed: !message.humanRepliesExpanded }" viewBox="0 0 20 20" fill="none">
+                      <path d="m6 8 4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                </button>
+                <div v-show="message.humanRepliesExpanded">
+                  <p v-for="(reply, index) in message.humanReplies" :key="index">{{ reply }}</p>
+                </div>
               </div>
 
               <footer class="agent-run-footer">
                 <span>{{ formatTime(message.time) }}</span>
-                <span>{{ message.events.length }} EVENTS</span>
+                <span>{{ message.events.length }} 个事件</span>
               </footer>
             </article>
           </div>
@@ -246,10 +296,33 @@ export default {
       currentStep: 0,
       summaries: [],
       toolCalls: [],
+      finalSummary: '',
       humanReplies: [],
+      humanRepliesExpanded: false,
       events: [],
       error: ''
     })
+
+    // 结束任务或收到最终结论时统一压缩执行细节，让用户先看到整体结果。
+    const collapseAllDetails = (message) => {
+      message.summaries.forEach((summary) => { summary.expanded = false })
+      message.toolCalls.forEach((toolCall) => { toolCall.expanded = false })
+      message.humanRepliesExpanded = false
+    }
+
+    // 汇总三类可折叠内容的状态，用于驱动右上角“展开/折叠步骤”按钮。
+    const isAllCollapsed = (message) =>
+      message.summaries.every((summary) => !summary.expanded) &&
+      message.toolCalls.every((toolCall) => !toolCall.expanded) &&
+      !message.humanRepliesExpanded
+
+    // 全量切换只改变展示状态，不修改 SSE 事件与工具调用原始数据。
+    const toggleAllDetails = (message) => {
+      const shouldExpand = isAllCollapsed(message)
+      message.summaries.forEach((summary) => { summary.expanded = shouldExpand })
+      message.toolCalls.forEach((toolCall) => { toolCall.expanded = shouldExpand })
+      message.humanRepliesExpanded = shouldExpand && message.humanReplies.length > 0
+    }
 
     const finishLocalRun = (status) => {
       isLoading.value = false
@@ -281,18 +354,27 @@ export default {
           activeRunMessage.phase = event.summary
           break
         case 'THINKING_SUMMARY':
-          activeRunMessage.summaries.push({ step: event.step, text: event.summary })
+          // 新步骤到达时自动收起旧步骤，只展开最新内容，避免长任务无限拉高页面。
+          activeRunMessage.summaries.forEach((summary) => { summary.expanded = false })
+          activeRunMessage.summaries.push({ step: event.step, text: event.summary, expanded: true })
           activeRunMessage.phase = `第 ${event.step} 步分析完成`
           break
+        case 'FINAL_SUMMARY':
+          activeRunMessage.finalSummary = event.summary
+          activeRunMessage.phase = '已生成最终结论'
+          collapseAllDetails(activeRunMessage)
+          break
         case 'TOOL_CALL':
+          activeRunMessage.toolCalls.forEach((toolCall) => { toolCall.expanded = false })
           activeRunMessage.toolCalls.push({
             key: event.data.id || `${event.step}-${activeRunMessage.toolCalls.length}`,
             step: event.step,
             name: event.data.name || 'unknown',
             data: event.data,
-            result: null
+            result: null,
+            expanded: true
           })
-          activeRunMessage.phase = `正在调用 ${event.data.name || '工具'}`
+          activeRunMessage.phase = `正在调用${toolDisplayName(event.data.name)}`
           break
         case 'TOOL_RESULT': {
           // 优先按工具调用 ID 关联；供应商未返回 ID 时，再关联最后一个同名且未完成的调用。
@@ -303,7 +385,7 @@ export default {
           if (toolCall) {
             toolCall.result = event.data
           }
-          activeRunMessage.phase = `${event.data.name || '工具'} 执行完成`
+          activeRunMessage.phase = `${toolDisplayName(event.data.name)}执行完成`
           break
         }
         case 'HUMAN_INPUT_REQUIRED':
@@ -313,6 +395,11 @@ export default {
           finishLocalRun('WAITING_HUMAN')
           break
         case 'RUN_COMPLETED':
+          // 兼容旧服务端或异常缺失 FINAL_SUMMARY 的情况，至少把最后一步小结提升为整体结论。
+          if (!activeRunMessage.finalSummary && activeRunMessage.summaries.length) {
+            activeRunMessage.finalSummary = activeRunMessage.summaries.at(-1).text
+          }
+          collapseAllDetails(activeRunMessage)
           activeRunMessage.phase = event.summary
           finishLocalRun('COMPLETED')
           break
@@ -385,6 +472,7 @@ export default {
 
       // 回复保存在同一张运行卡片里，强调这是暂停任务的继续，而不是一条新任务。
       activeRunMessage.humanReplies.push(answer)
+      activeRunMessage.humanRepliesExpanded = true
       askHumanInput.value = ''
       askHumanQuestion.value = ''
       activeRunMessage.status = 'RUNNING'
@@ -437,6 +525,18 @@ export default {
     })
     const formatJson = (value) => JSON.stringify(value, null, 2)
     const shortRunId = (runId) => runId.slice(-8).toUpperCase()
+    const toolDisplayName = (name) => ({
+      askHuman: '询问用户',
+      confirmAction: '请求操作确认',
+      selectOption: '请求用户选择',
+      doTerminate: '完成任务',
+      fileOperation: '文件操作',
+      webSearch: '联网搜索',
+      webScraping: '网页读取',
+      resourceDownload: '资源下载',
+      terminalOperation: '终端操作',
+      pdfGeneration: '生成 PDF'
+    }[name] || name || '工具')
     const statusText = (status) => ({
       RUNNING: '运行中',
       WAITING_HUMAN: '等待确认',
@@ -461,6 +561,9 @@ export default {
       formatTime,
       formatJson,
       shortRunId,
+      toolDisplayName,
+      isAllCollapsed,
+      toggleAllDetails,
       statusText
     }
   }
