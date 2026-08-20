@@ -25,8 +25,8 @@ public class ToolRegistration {
         TerminalOperationTool terminalOperationTool = new TerminalOperationTool(new SandboxedCommandExecutor());
         PDFGenerationTool pdfGenerationTool = new PDFGenerationTool();
         TerminateTool terminateTool = new TerminateTool();
-        // 暂时禁用 askHuman 工具,避免 Agent 陷入死循环
-        // AskHumanTool askHumanTool = new AskHumanTool();
+        // AskHuman 现在由 Agent 运行时转换为可恢复的暂停点，不会在工作线程中阻塞或死循环。
+        AskHumanTool askHumanTool = new AskHumanTool();
         return ToolCallbacks.from(
                 fileOperationTool,
                 webSearchTool,
@@ -34,8 +34,8 @@ public class ToolRegistration {
                 resourceDownloadTool,
                 terminalOperationTool,
                 pdfGenerationTool,
-                terminateTool
-                // askHumanTool
+                terminateTool,
+                askHumanTool
         );
     }
 

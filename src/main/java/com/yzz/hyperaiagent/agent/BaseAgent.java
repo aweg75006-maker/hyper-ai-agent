@@ -2,17 +2,18 @@ package com.yzz.hyperaiagent.agent;
 
 import cn.hutool.core.util.StrUtil;
 import com.yzz.hyperaiagent.agent.model.AgentState;
+import com.yzz.hyperaiagent.agent.runtime.AgentRunContext;
+import com.yzz.hyperaiagent.agent.runtime.AgentRunEventType;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.Map;
 
 /**
  * 抽象基础代理类，用于管理代理状态和执行流程。
@@ -31,6 +32,9 @@ public abstract class BaseAgent {
     private int currentStep = 0;
     private int maxSteps = 10;
     private ChatClient chatClient;
+
+    /** 当前运行上下文由运行服务注入，不直接持有任何 Web/SSE 类型。 */
+    private transient AgentRunContext runContext;
 
     private List<Message> messageList = new ArrayList<>();
 
@@ -89,96 +93,163 @@ public abstract class BaseAgent {
     }
 
     /**
-     * 运行代理（流式输出）
+     * 启动一次可观察、可取消的交互式运行。
      *
-     * @param userPrompt 用户提示词
-     * @return 执行结果
+     * <p>这里负责 Agent 生命周期，SSE 建连和线程调度交给上层运行服务处理。</p>
      */
-    public SseEmitter runStream(String userPrompt) {
-        // 创建一个超时时间较长的 SseEmitter
-        SseEmitter sseEmitter = new SseEmitter(300000L); // 5 分钟超时
-        // 使用线程异步处理，避免阻塞主线程
-        CompletableFuture.runAsync(() -> {
-            // 1、基础校验
-            try {
-                if (this.state != AgentState.IDLE) {
-                    sseEmitter.send("错误：无法从状态运行代理：" + this.state);
-                    sseEmitter.complete();
-                    return;
-                }
-                if (StrUtil.isBlank(userPrompt)) {
-                    sseEmitter.send("错误：不能使用空提示词运行代理");
-                    sseEmitter.complete();
-                    return;
-                }
-            } catch (Exception e) {
-                sseEmitter.completeWithError(e);
-            }
-            // 2、执行，更改状态
-            this.state = AgentState.RUNNING;
-            // 记录消息上下文
-            messageList.add(new UserMessage(userPrompt));
-            // 保存结果列表
-            List<String> results = new ArrayList<>();
-            try {
-                // 执行循环
-                for (int i = 0; i < maxSteps && state != AgentState.FINISHED; i++) {
-                    int stepNumber = i + 1;
-                    currentStep = stepNumber;
-                    log.info("Executing step {}/{}", stepNumber, maxSteps);
-                    // 单步执行
-                    String stepResult = step();
-                    String result = "Step " + stepNumber + ": " + stepResult;
-                    results.add(result);
-                    // 输出当前每一步的结果到 SSE
-                    sseEmitter.send(result);
+    public AgentState startInteractive(String userPrompt, AgentRunContext context) {
+        if (this.state != AgentState.IDLE) {
+            throw new IllegalStateException("无法从状态启动 Agent: " + this.state);
+        }
+        if (StrUtil.isBlank(userPrompt)) {
+            throw new IllegalArgumentException("任务描述不能为空");
+        }
 
-                    // 检查是否需要用户输入
-                    if (stepResult.contains("[需要用户输入]")) {
-                        log.info("Agent 需要用户输入，等待用户回复");
-                        // 不结束循环，但暂停等待用户回复
-                        // 通过抛出特殊标记来中断，等待下次请求
-                        break;
-                    }
-                }
-                // 检查是否超出步骤限制
-                if (currentStep >= maxSteps) {
-                    state = AgentState.FINISHED;
-                    results.add("Terminated: Reached max steps (" + maxSteps + ")");
-                    sseEmitter.send("执行结束：达到最大步骤（" + maxSteps + "）");
-                }
-                // 正常完成
-                sseEmitter.complete();
-            } catch (Exception e) {
-                state = AgentState.ERROR;
-                log.error("error executing agent", e);
-                try {
-                    sseEmitter.send("执行错误：" + e.getMessage());
-                    sseEmitter.complete();
-                } catch (Exception ex) {
-                    sseEmitter.completeWithError(ex);
-                }
-            } finally {
-                // 3、清理资源
-                this.cleanup();
-            }
-        });
+        this.runContext = context;
+        this.state = AgentState.RUNNING;
+        this.messageList.add(new UserMessage(userPrompt));
+        publishEvent(AgentRunEventType.RUN_STARTED, "任务已开始", "任务智能体已接收目标并开始规划。", Map.of());
+        return executeInteractiveLoop();
+    }
 
-        // 设置超时回调
-        sseEmitter.onTimeout(() -> {
-            this.state = AgentState.ERROR;
-            this.cleanup();
-            log.warn("SSE connection timeout");
-        });
-        // 设置完成回调
-        sseEmitter.onCompletion(() -> {
-            if (this.state == AgentState.RUNNING) {
-                this.state = AgentState.FINISHED;
+    /**
+     * 在同一个运行上下文中接收人工回答并继续执行。
+     */
+    public AgentState resumeInteractive(String humanAnswer, AgentRunContext context) {
+        if (this.state != AgentState.WAITING_HUMAN) {
+            throw new IllegalStateException("当前运行不在等待人工输入状态: " + this.state);
+        }
+        if (StrUtil.isBlank(humanAnswer)) {
+            throw new IllegalArgumentException("人工回复不能为空");
+        }
+
+        this.runContext = context;
+        // 子类会把回答组装为标准 ToolResponseMessage，确保模型能沿用原工具调用继续推理。
+        acceptHumanResponse(humanAnswer);
+        this.state = AgentState.RUNNING;
+        publishEvent(AgentRunEventType.RUN_RESUMED, "已收到人工回复", "继续执行当前任务。", Map.of());
+        return executeInteractiveLoop();
+    }
+
+    /**
+     * 执行单线程 ReAct 循环，并在每个模型步骤前后检查取消信号。
+     */
+    private AgentState executeInteractiveLoop() {
+        try {
+            while (currentStep < maxSteps && state == AgentState.RUNNING) {
+                if (isCancellationRequested()) {
+                    markCancelled();
+                    break;
+                }
+
+                currentStep++;
+                log.info("Executing step {}/{}", currentStep, maxSteps);
+                publishEvent(
+                        AgentRunEventType.THINKING_STARTED,
+                        "深度思考",
+                        "正在分析第 " + currentStep + " 步并选择下一项行动。",
+                        Map.of("maxSteps", maxSteps)
+                );
+
+                // step() 内部会继续发布思考小结、工具调用和工具结果等细粒度事件。
+                step();
+
+                if (isCancellationRequested()) {
+                    markCancelled();
+                    break;
+                }
+                if (state == AgentState.WAITING_HUMAN) {
+                    // 等待人工输入时必须保留消息历史和当前步骤，不能执行 cleanup()。
+                    return state;
+                }
+                if (state == AgentState.RUNNING && isStuck()) {
+                    handleStuckState();
+                }
             }
-            this.cleanup();
-            log.info("SSE connection completed");
-        });
-        return sseEmitter;
+
+            if (state == AgentState.RUNNING && currentStep >= maxSteps) {
+                state = AgentState.FINISHED;
+                publishEvent(
+                        AgentRunEventType.RUN_COMPLETED,
+                        "达到步骤上限",
+                        "任务已在最大步骤数 " + maxSteps + " 处结束。",
+                        Map.of("reason", "MAX_STEPS")
+                );
+            } else if (state == AgentState.FINISHED) {
+                publishEvent(
+                        AgentRunEventType.RUN_COMPLETED,
+                        "任务完成",
+                        "任务智能体已完成本次运行。",
+                        Map.of("reason", "COMPLETED")
+                );
+            }
+            return state;
+        } catch (Exception exception) {
+            if (isCancellationRequested() || state == AgentState.CANCELLED) {
+                // 主动中断模型 HTTP 调用时通常会抛异常，这属于取消结果，不能覆盖成 ERROR。
+                markCancelled();
+                return state;
+            }
+            state = AgentState.ERROR;
+            log.error("任务智能体运行失败", exception);
+            publishEvent(
+                    AgentRunEventType.RUN_ERROR,
+                    "执行失败",
+                    safeErrorMessage(exception),
+                    Map.of("exception", exception.getClass().getSimpleName())
+            );
+            return state;
+        } finally {
+            // 只有终态才能清理；WAITING_HUMAN 必须保留上下文以便真正续跑。
+            if (state != AgentState.WAITING_HUMAN && state != AgentState.RUNNING) {
+                cleanup();
+            }
+        }
+    }
+
+    /** 子类可覆盖该方法，把人工回答接回暂停前的工具调用协议。 */
+    protected void acceptHumanResponse(String humanAnswer) {
+        this.messageList.add(new UserMessage(humanAnswer));
+    }
+
+    /** 由运行服务和执行循环共同使用的统一取消入口。 */
+    public void cancel() {
+        markCancelled();
+    }
+
+    private void markCancelled() {
+        if (state == AgentState.CANCELLED || state == AgentState.FINISHED || state == AgentState.ERROR) {
+            return;
+        }
+        state = AgentState.CANCELLED;
+        publishEvent(
+                AgentRunEventType.RUN_CANCELLED,
+                "运行已终止",
+                "用户已手动终止任务，后续步骤不会继续执行。",
+                Map.of("reason", "USER_CANCELLED")
+        );
+    }
+
+    protected boolean isCancellationRequested() {
+        return runContext != null && runContext.isCancellationRequested();
+    }
+
+    /**
+     * 供 ReAct 子类发布结构化事件；非交互式 run() 调用时会安全跳过。
+     */
+    protected void publishEvent(
+            AgentRunEventType type,
+            String title,
+            String summary,
+            Map<String, Object> data
+    ) {
+        if (runContext != null) {
+            runContext.publish(type, currentStep, title, summary, data);
+        }
+    }
+
+    private String safeErrorMessage(Exception exception) {
+        return StrUtil.isBlank(exception.getMessage()) ? "任务执行时发生未知错误" : exception.getMessage();
     }
 
 
@@ -189,9 +260,7 @@ public abstract class BaseAgent {
      * 在Agent执行完成后被调用（无论成功、失败还是超时），用于释放和重置资源
      * 调用位置：
      * 1. run() 方法的 finally 块 - 正常执行完成后清理
-     * 2. runStream() 异步线程的 finally 块 - 流式执行完成后清理
-     * 3. SSE 超时回调 - 连接超时时清理
-     * 4. SSE 完成回调 - 连接正常完成时清理
+     * 2. 交互式运行进入完成、取消或错误终态后清理
      */
     protected void cleanup() {
         try {
@@ -209,6 +278,9 @@ public abstract class BaseAgent {
 
             // 3. 清空循环检测时添加的临时提示
             this.nextPrompt = null;
+
+            // 4. 解除事件回调引用，避免已完成运行继续占用 MVC 连接相关对象
+            this.runContext = null;
 
             // 4. 不需要重置 state，因为：
             //    - 成功完成时已在回调中设置为 FINISHED

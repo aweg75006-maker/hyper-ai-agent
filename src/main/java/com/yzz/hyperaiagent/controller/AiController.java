@@ -1,17 +1,20 @@
 package com.yzz.hyperaiagent.controller;
 
 import com.yzz.hyperaiagent.App.PsyApp;
-import com.yzz.hyperaiagent.agent.HyperManus;
-import com.yzz.hyperaiagent.gateway.application.GatewayChatModelFactory;
+import com.yzz.hyperaiagent.agent.runtime.AgentRunService;
 import jakarta.annotation.Resource;
-import org.springframework.ai.tool.ToolCallback;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/ai")
@@ -21,10 +24,7 @@ public class AiController {
     private PsyApp psyApp;
 
     @Resource
-    private ToolCallback[] allTools;
-
-    @Resource
-    private GatewayChatModelFactory gatewayChatModelFactory;
+    private AgentRunService agentRunService;
 
     /**
      * 同步调用 AI 心理咨询大师应用
@@ -94,10 +94,31 @@ public class AiController {
      * @param message
      * @return
      */
-    @GetMapping("/manus/chat")
-    public SseEmitter doChatWithManus(String message) {
-        // 每次请求创建独立 Agent 状态，但模型选择统一经过 agent-tool-calling 路由。
-        HyperManus hyperManus = new HyperManus(allTools, gatewayChatModelFactory);
-        return hyperManus.runStream(message);
+    @GetMapping(value = "/manus/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter doChatWithManus(
+            @RequestParam String runId,
+            @RequestParam String message
+    ) {
+        return agentRunService.start(runId, message);
+    }
+
+    /**
+     * 将人工回答接回同一次 AskHuman 工具调用，并继续推送后续运行事件。
+     */
+    @GetMapping(value = "/manus/runs/{runId}/resume", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter resumeManus(
+            @PathVariable String runId,
+            @RequestParam String answer
+    ) {
+        return agentRunService.resume(runId, answer);
+    }
+
+    /**
+     * 服务端真实取消运行：不只关闭浏览器连接，也会设置取消信号并中断后台任务。
+     */
+    @PostMapping("/manus/runs/{runId}/cancel")
+    public Map<String, Object> cancelManus(@PathVariable String runId) {
+        agentRunService.cancel(runId);
+        return Map.of("runId", runId, "status", "CANCELLED");
     }
 }

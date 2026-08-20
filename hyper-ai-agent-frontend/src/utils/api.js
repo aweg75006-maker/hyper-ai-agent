@@ -60,56 +60,73 @@ export function chatWithPsyAppSse(message, chatId, onMessage, onError, onClose) 
 }
 
 /**
- * 调用智能体SSE接口
- * @param {string} message - 用户消息
- * @param {Function} onMessage - 消息回调函数
- * @param {Function} onError - 错误回调函数
- * @param {Function} onClose - 正常关闭回调函数
+ * 建立任务智能体的结构化事件流。
+ * 服务端会在完成、取消或等待人工输入后主动关闭当前这一段 SSE。
  */
-export function chatWithManus(message, onMessage, onError, onClose) {
-  const url = `${API_BASE_URL}/ai/manus/chat?message=${encodeURIComponent(message)}`
-
+function openManusStream(url, onEvent, onError, onClose) {
   const eventSource = new EventSource(url)
   let hasReceivedData = false
   let isHandled = false
+  let expectedCloseReason = ''
 
   eventSource.onmessage = (event) => {
     if (event.data) {
       hasReceivedData = true
-      onMessage(event.data)
+      try {
+        const runEvent = JSON.parse(event.data)
+        onEvent(runEvent)
+
+        // EventSource 没有正常结束回调，记录终止事件后可在 onerror 中识别服务端正常关闭。
+        if (['RUN_COMPLETED', 'RUN_CANCELLED', 'RUN_ERROR', 'HUMAN_INPUT_REQUIRED'].includes(runEvent.type)) {
+          expectedCloseReason = runEvent.type
+        }
+      } catch (parseError) {
+        isHandled = true
+        eventSource.close()
+        onError(new Error(`无法解析任务事件: ${parseError.message}`))
+      }
     }
   }
 
   eventSource.onerror = (error) => {
-    // 确保只处理一次
     if (isHandled) {
       return
     }
 
-    // 如果已经接收到数据，认为连接是正常关闭的
-    // EventSource 在正常关闭时也会触发 onerror 事件
-    if (hasReceivedData) {
+    if (hasReceivedData && expectedCloseReason) {
       isHandled = true
-      // 延迟关闭，确保所有数据都已接收
-      setTimeout(() => {
-        eventSource.close()
-        if (onClose) {
-          onClose()
-        }
-      }, 100)
+      eventSource.close()
+      onClose?.(expectedCloseReason)
       return
     }
 
-    // 如果没有接收到任何数据就出错，才是真正的错误
     isHandled = true
-    console.error('SSE Error:', error)
     eventSource.close()
-    if (onError) {
-      onError(error)
-    }
+    onError?.(error)
   }
 
   return eventSource
+}
+
+/** 启动一条新的任务智能体运行。 */
+export function chatWithManus(runId, message, onEvent, onError, onClose) {
+  const url = `${API_BASE_URL}/ai/manus/chat?runId=${encodeURIComponent(runId)}&message=${encodeURIComponent(message)}`
+  return openManusStream(url, onEvent, onError, onClose)
+}
+
+/** 把人工回答接回同一个运行中的 AskHuman 工具调用。 */
+export function resumeManusRun(runId, answer, onEvent, onError, onClose) {
+  const url = `${API_BASE_URL}/ai/manus/runs/${encodeURIComponent(runId)}/resume?answer=${encodeURIComponent(answer)}`
+  return openManusStream(url, onEvent, onError, onClose)
+}
+
+/**
+ * 主动终止服务端运行。
+ * 前端关闭 EventSource 只是断开显示，这个接口才会真正中断后台工作线程。
+ */
+export async function cancelManusRun(runId) {
+  const response = await axios.post(`${API_BASE_URL}/ai/manus/runs/${encodeURIComponent(runId)}/cancel`)
+  return response.data
 }
 
 /**
