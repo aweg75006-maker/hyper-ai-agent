@@ -325,10 +325,12 @@ button:focus-visible, input:focus-visible, [tabindex='0']:focus-visible { outlin
 .collapse-all-btn svg,
 .detail-toggle svg,
 .tool-call-step svg,
+.react-stage-toggle svg,
 .human-reply-toggle svg { width: 15px; height: 15px; transition: transform 160ms ease; }
 .collapse-all-btn svg.collapsed,
 .detail-toggle svg.collapsed,
 .tool-call-step svg.collapsed,
+.react-stage-toggle svg.collapsed,
 .human-reply-toggle svg.collapsed { transform: rotate(-90deg); }
 .run-status { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid #e0e4eb; border-radius: 999px; background: #fff; color: #697386; font-size: 12px; font-weight: 650; white-space: nowrap; }
 .run-status i { width: 7px; height: 7px; border-radius: 50%; background: #9098a7; }
@@ -342,6 +344,42 @@ button:focus-visible, input:focus-visible, [tabindex='0']:focus-visible { outlin
 .run-status.status-error { border-color: #f0d5d5; background: #fff7f7; color: #aa4b4b; }
 .run-status.status-cancelled i,
 .run-status.status-error i { background: #d85e5e; }
+
+.react-timeline { padding: 20px 21px; border-bottom: 1px solid #eceef3; background: #fcfcfd; }
+.react-timeline-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 15px; }
+.react-timeline-heading > div > span { color: #8d96a7; font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+.react-timeline-heading h4 { margin: 5px 0 0; color: #273143; font-size: 16px; }
+.react-timeline-heading > span { color: #8b93a2; font-size: 11px; font-weight: 650; }
+.react-stage-list { display: grid; gap: 12px; }
+.react-stage-card { position: relative; overflow: hidden; border: 1px solid #e0e4ec; border-radius: 13px; background: #fff; box-shadow: 0 5px 16px rgba(28,37,55,.04); animation: stageReveal 240ms ease-out both; }
+.react-stage-card::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: #a39cf2; content: ''; }
+.react-stage-card.stage-thinking::before { background: #6d63f5; animation: agentPulse 1.4s infinite; }
+.react-stage-card.stage-completed::before { background: #48a773; }
+.react-stage-card.stage-waiting_human::before { background: #d49a31; }
+.react-stage-header { width: 100%; min-height: 62px; display: flex; align-items: center; gap: 12px; padding: 12px 14px 12px 16px; border: 0; background: #fff; cursor: pointer; text-align: left; transition: background 150ms ease; }
+.react-stage-header:hover { background: #faf9ff; }
+.react-stage-number { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; border-radius: 10px; background: #f0efff; color: #6258df; font-family: Manrope,sans-serif; font-size: 11px; font-weight: 800; }
+.react-stage-title { min-width: 0; display: grid; gap: 3px; }
+.react-stage-title strong { color: #30394b; font-size: 14px; }
+.react-stage-title small { color: #8c94a4; font-size: 11px; }
+.react-stage-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: #8991a0; font-size: 11px; }
+.react-stage-body { border-top: 1px solid #eceef3; background: #fbfbfd; }
+.stage-part { padding: 16px 17px; border-bottom: 1px solid #eceef3; }
+.stage-part:last-child { border-bottom: 0; }
+.stage-part-heading { display: flex; align-items: flex-start; gap: 10px; }
+.stage-part-heading > span { width: 26px; height: 26px; flex: 0 0 26px; display: grid; place-items: center; border-radius: 8px; background: #f0efff; color: #655be6; font-size: 9px; font-weight: 800; }
+.stage-part-heading > div { display: grid; gap: 2px; }
+.stage-part-heading strong { color: #3b4558; font-size: 13px; }
+.stage-part-heading small { color: #929aaa; font-size: 10px; }
+.stage-thinking-state { display: flex; align-items: center; gap: 10px; margin: 12px 0 0 36px; padding: 11px 12px; border: 1px solid #e4e1ff; border-radius: 10px; background: #f7f6ff; }
+.stage-thinking-state p { margin: 0; color: #4d556b; font-size: 13px; }
+.stage-summary { margin: 12px 0 0 36px; color: #465064; font-size: 14px; line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
+.stage-summary.pending,
+.stage-tool-empty { color: #979eac; font-style: italic; }
+.stage-tool-list { margin: 12px 0 0 36px; }
+.stage-tool-empty { margin: 12px 0 0 36px; font-size: 12px; }
+.react-stage-empty { min-height: 64px; display: flex; align-items: center; gap: 11px; padding: 14px; border: 1px dashed #dcdfea; border-radius: 12px; background: #fff; }
+.react-stage-empty p { margin: 0; color: #7f8797; font-size: 13px; }
 
 .execution-section { padding: 20px 21px; border-bottom: 1px solid #eceef3; }
 .execution-section-heading { display: flex; align-items: flex-start; gap: 12px; }
@@ -401,12 +439,19 @@ button:focus-visible, input:focus-visible, [tabindex='0']:focus-visible { outlin
 
 @keyframes agentSpin { to { transform: rotate(360deg); } }
 @keyframes agentPulse { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+@keyframes stageReveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-width: 700px) {
   .agent-run-header { align-items: flex-start; }
   .agent-run-header-actions { align-items: flex-end; flex-direction: column-reverse; }
   .collapse-all-btn { min-height: 28px; }
   .agent-run-card { border-radius: 14px; }
+  .react-timeline { padding: 17px 15px; }
+  .react-timeline-heading { align-items: flex-start; }
+  .stage-thinking-state,
+  .stage-summary,
+  .stage-tool-list,
+  .stage-tool-empty { margin-left: 0; }
   .execution-section { padding: 17px 15px; }
   .thinking-progress,
   .summary-list,

@@ -3,6 +3,7 @@ package com.yzz.hyperaiagent.controller;
 import com.yzz.hyperaiagent.App.PsyApp;
 import com.yzz.hyperaiagent.agent.runtime.AgentRunService;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -97,8 +98,10 @@ public class AiController {
     @GetMapping(value = "/manus/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter doChatWithManus(
             @RequestParam String runId,
-            @RequestParam String message
+            @RequestParam String message,
+            HttpServletResponse response
     ) {
+        configureManusSseResponse(response);
         return agentRunService.start(runId, message);
     }
 
@@ -108,9 +111,22 @@ public class AiController {
     @GetMapping(value = "/manus/runs/{runId}/resume", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter resumeManus(
             @PathVariable String runId,
-            @RequestParam String answer
+            @RequestParam String answer,
+            HttpServletResponse response
     ) {
+        configureManusSseResponse(response);
         return agentRunService.resume(runId, answer);
+    }
+
+    /**
+     * 明确禁止浏览器、反向代理和压缩中间件缓存任务事件流。
+     *
+     * <p>没有这些响应头时，部分部署环境会把多条 ReAct 事件攒成一个响应块，
+     * 导致前端在任务结束时一次性看到所有步骤。</p>
+     */
+    private void configureManusSseResponse(HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-cache, no-store, no-transform");
+        response.setHeader("X-Accel-Buffering", "no");
     }
 
     /**
