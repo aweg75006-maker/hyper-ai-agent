@@ -41,7 +41,8 @@ public class HyperManus extends ToolCallAgent{
                 将它完整写入 `doTerminate.finalSummary` 后再结束；不要在没有整体结论时直接调用工具。
                 """;
         this.setNextStepPrompt(NEXT_STEP_PROMPT);
-        this.setMaxSteps(20); // 父类支持 get set 方法
+        // 任务智能体最多执行 7 轮，防止模型反复规划或工具调用陷入长循环。
+        this.setMaxSteps(7);
 
         // 初始化 AI 对话客户端
         ChatClient chatClient = ChatClient.builder(gatewayChatModelFactory.create("agent-tool-calling"))
