@@ -1,56 +1,101 @@
 <template>
-  <div class="home-container">
-    <div class="header">
-      <h1>Hyper AI Agent</h1>
-      <p class="subtitle">选择您想要使用的AI应用</p>
-    </div>
-
-    <div class="apps-grid">
-      <div class="app-card" @click="goToPsychology">
-        <div class="app-icon psychology-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/>
-            <path d="M12.5 11H11c-.55 0-1-.45-1-1s.45-1 1-1h1.5c.83 0 1.5-.67 1.5-1.5S13.33 6 12.5 6H11c-.55 0-1-.45-1-1s.45-1 1-1h1.5c1.93 0 3.5 1.57 3.5 3.5S14.43 12 12.5 12zM7.5 13h2c.55 0 1 .45 1 1s-.45 1-1 1h-2c-.83 0-1.5.67-1.5 1.5S6.67 18 7.5 18h2c.55 0 1 .45 1 1s-.45 1-1 1h-2c-1.93 0-3.5-1.57-3.5-3.5S5.57 13 7.5 13z" fill="currentColor"/>
-          </svg>
-        </div>
-        <h2>AI 心理咨询大师</h2>
-        <p>专业的AI心理咨询服务，为您提供心理支持和指导</p>
+  <div class="workspace-shell">
+    <aside class="workspace-sidebar">
+      <div class="brand-lockup">
+        <div class="brand-mark" aria-hidden="true">H</div>
+        <div><strong>Hyper AI</strong><span>Agent Platform</span></div>
       </div>
 
-      <div class="app-card" @click="goToManus">
-        <div class="app-icon manus-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" fill="currentColor"/>
-          </svg>
-        </div>
-        <h2>AI 超级智能体</h2>
-        <p>强大的AI智能助手，帮您解决各种问题</p>
-      </div>
+      <nav class="workspace-nav" aria-label="工作台导航">
+        <div class="nav-label">Workspace</div>
+        <button class="nav-item active" type="button"><span class="nav-symbol">⌂</span>应用中心</button>
+        <button class="nav-item" type="button" @click="goToAssistant"><span class="nav-symbol">◫</span>会话助手</button>
+        <button class="nav-item" type="button" @click="goToPDF"><span class="nav-symbol">▤</span>知识问答</button>
+      </nav>
 
-      <div class="app-card" @click="goToAssistant">
-        <div class="app-icon assistant-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" fill="currentColor"/>
-          </svg>
+      <div class="sidebar-foot">
+        <div class="environment-card">
+          <div class="environment-head"><span class="status-dot"></span>Local Environment</div>
+          <p>后端服务运行正常</p>
+          <span>Spring Boot · 8123</span>
         </div>
-        <h2>AI 聊天助手</h2>
-        <p>智能聊天助手，支持多会话管理和历史记录持久化</p>
       </div>
+    </aside>
 
-      <div class="app-card" @click="goToPDF">
-        <div class="app-icon pdf-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" fill="currentColor"/>
-            <polyline points="14 2 14 8 20 8" fill="currentColor"/>
-            <line x1="16" y1="13" x2="8" y2="13" fill="currentColor"/>
-            <line x1="16" y1="17" x2="8" y2="17" fill="currentColor"/>
-            <polyline points="10 9 9 9 8 9" fill="currentColor"/>
-          </svg>
+    <main class="workspace-main">
+      <header class="workspace-topbar">
+        <div><span class="eyebrow">AI WORKSPACE</span><h1>应用中心</h1></div>
+        <div class="topbar-meta">
+          <span class="live-badge"><i></i> All systems operational</span>
+          <div class="user-avatar" aria-label="本地开发环境">DEV</div>
         </div>
-        <h2>ChatPDF</h2>
-        <p>上传PDF文档，与AI模型对话，获取文档相关信息和分析</p>
-      </div>
-    </div>
+      </header>
+
+      <section class="workspace-content">
+        <div class="hero-panel">
+          <div class="hero-copy">
+            <span class="hero-kicker">SPRING AI · AGENT RUNTIME</span>
+            <h2>让模型能力进入<br><em>可执行的业务流程</em></h2>
+            <p>统一体验对话、任务规划与知识库检索能力。每个应用都由真实的 Java 后端服务驱动。</p>
+            <div class="hero-actions">
+              <button class="primary-action" type="button" @click="goToAssistant">开始新会话 <span>→</span></button>
+              <button class="secondary-action" type="button" @click="goToPDF">上传知识文档</button>
+            </div>
+          </div>
+
+          <div class="runtime-visual" aria-label="Agent 运行链路">
+            <div class="runtime-title"><span>Agent Runtime</span><span class="runtime-state"><i></i> Ready</span></div>
+            <div class="runtime-flow">
+              <div class="flow-node"><span class="node-index">01</span><div><strong>Request</strong><small>Context input</small></div></div>
+              <div class="flow-line"><span></span></div>
+              <div class="flow-node active"><span class="node-index">02</span><div><strong>Reasoning</strong><small>ReAct loop</small></div></div>
+              <div class="flow-line"><span></span></div>
+              <div class="flow-node"><span class="node-index">03</span><div><strong>Execute</strong><small>Tools &amp; RAG</small></div></div>
+            </div>
+            <div class="runtime-footer">
+              <span><i class="violet"></i> Tool Calling</span>
+              <span><i class="cyan"></i> Vector Search</span>
+              <span><i class="green"></i> SSE Stream</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-heading">
+          <div><h3>可用应用</h3><p>选择一个能力开始体验</p></div>
+          <span class="app-count">4 APPS</span>
+        </div>
+
+        <div class="apps-grid">
+          <article class="app-card" tabindex="0" @click="goToPsychology" @keyup.enter="goToPsychology">
+            <div class="card-topline"><div class="app-icon psychology-icon">PS</div><span class="availability"><i></i> Available</span></div>
+            <div class="card-copy"><span class="app-category">CONVERSATIONAL AI</span><h4>心理咨询助手</h4><p>面向心理支持场景的流式对话服务，提供连续、自然的咨询体验。</p></div>
+            <div class="card-meta"><span>SSE Streaming</span><span>Context Memory</span></div>
+            <div class="card-link">打开应用 <span>↗</span></div>
+          </article>
+
+          <article class="app-card featured" tabindex="0" @click="goToManus" @keyup.enter="goToManus">
+            <div class="card-topline"><div class="app-icon manus-icon">AG</div><span class="availability"><i></i> Available</span></div>
+            <div class="card-copy"><span class="app-category">AUTONOMOUS AGENT</span><h4>任务智能体</h4><p>通过 ReAct 循环自主规划与执行任务，并支持关键节点人工确认。</p></div>
+            <div class="card-meta"><span>Agent Loop</span><span>Ask Human</span></div>
+            <div class="card-link">打开应用 <span>↗</span></div>
+          </article>
+
+          <article class="app-card" tabindex="0" @click="goToAssistant" @keyup.enter="goToAssistant">
+            <div class="card-topline"><div class="app-icon assistant-icon">CH</div><span class="availability"><i></i> Available</span></div>
+            <div class="card-copy"><span class="app-category">CHAT SERVICE</span><h4>多会话助手</h4><p>支持会话创建、历史记录与上下文持久化的通用对话服务。</p></div>
+            <div class="card-meta"><span>Chat History</span><span>Persistence</span></div>
+            <div class="card-link">打开应用 <span>↗</span></div>
+          </article>
+
+          <article class="app-card" tabindex="0" @click="goToPDF" @keyup.enter="goToPDF">
+            <div class="card-topline"><div class="app-icon pdf-icon">KB</div><span class="availability"><i></i> Available</span></div>
+            <div class="card-copy"><span class="app-category">KNOWLEDGE BASE</span><h4>文档知识问答</h4><p>上传 PDF 并完成向量检索，让模型基于文档上下文回答问题。</p></div>
+            <div class="card-meta"><span>RAG Pipeline</span><span>PDF Preview</span></div>
+            <div class="card-link">打开应用 <span>↗</span></div>
+          </article>
+        </div>
+      </section>
+    </main>
   </div>
 </template>
 
@@ -58,125 +103,10 @@
 export default {
   name: 'Home',
   methods: {
-    goToPsychology() {
-      this.$router.push('/psychology')
-    },
-    goToManus() {
-      this.$router.push('/manus')
-    },
-    goToAssistant() {
-      this.$router.push('/assistant')
-    },
-    goToPDF() {
-      this.$router.push('/pdf')
-    }
+    goToPsychology() { this.$router.push('/psychology') },
+    goToManus() { this.$router.push('/manus') },
+    goToAssistant() { this.$router.push('/assistant') },
+    goToPDF() { this.$router.push('/pdf') }
   }
 }
 </script>
-
-<style scoped>
-.home-container {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.header {
-  text-align: center;
-  color: white;
-  margin-bottom: 60px;
-}
-
-.header h1 {
-  font-size: 3.5em;
-  font-weight: 700;
-  margin-bottom: 10px;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.subtitle {
-  font-size: 1.2em;
-  opacity: 0.9;
-}
-
-.apps-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 30px;
-  max-width: 1000px;
-  width: 100%;
-}
-
-.app-card {
-  background: white;
-  border-radius: 20px;
-  padding: 40px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-}
-
-.app-card:hover {
-  transform: translateY(-10px);
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
-}
-
-.app-icon {
-  width: 80px;
-  height: 80px;
-  margin: 0 auto 20px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.psychology-icon {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.manus-icon {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.assistant-icon {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-}
-
-.pdf-icon {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-}
-
-.app-icon svg {
-  width: 50px;
-  height: 50px;
-}
-
-.app-card h2 {
-  font-size: 1.8em;
-  margin-bottom: 15px;
-  color: #333;
-}
-
-.app-card p {
-  color: #666;
-  line-height: 1.6;
-  font-size: 1em;
-}
-
-@media (max-width: 768px) {
-  .header h1 {
-    font-size: 2.5em;
-  }
-
-  .apps-grid {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
