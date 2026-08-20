@@ -7,6 +7,9 @@ import com.yzz.hyperaiagent.gateway.config.AiGatewayProperties;
 import com.yzz.hyperaiagent.gateway.domain.metering.CostEstimate;
 import com.yzz.hyperaiagent.gateway.domain.metering.CostMeter;
 import com.yzz.hyperaiagent.gateway.domain.model.ModelCapability;
+import com.yzz.hyperaiagent.gateway.domain.observability.GatewayAuditEventType;
+import com.yzz.hyperaiagent.gateway.domain.observability.GatewayTrace;
+import com.yzz.hyperaiagent.gateway.domain.observability.GatewayTraceFactory;
 import com.yzz.hyperaiagent.gateway.domain.quota.GatewayQuotaGuard;
 import com.yzz.hyperaiagent.gateway.domain.quota.GatewayQuotaGuard.QuotaLease;
 import com.yzz.hyperaiagent.gateway.domain.registry.ModelRegistry;
@@ -63,6 +66,8 @@ public class DefaultAiGatewayService implements AiGatewayService {
     private final CostMeter costMeter;
     private final AiGatewayProperties properties;
     private final MeterRegistry meterRegistry;
+    private final GatewayTraceFactory traceFactory;
+    private final GatewayAuditRecorder auditRecorder;
     private final AtomicInteger activeStreams = new AtomicInteger();
 
     public DefaultAiGatewayService(
@@ -74,7 +79,9 @@ public class DefaultAiGatewayService implements AiGatewayService {
             ProviderResilienceExecutor resilienceExecutor,
             CostMeter costMeter,
             AiGatewayProperties properties,
-            MeterRegistry meterRegistry
+            MeterRegistry meterRegistry,
+            GatewayTraceFactory traceFactory,
+            GatewayAuditRecorder auditRecorder
     ) {
         this.modelRegistry = modelRegistry;
         this.routeEngine = routeEngine;
@@ -85,6 +92,8 @@ public class DefaultAiGatewayService implements AiGatewayService {
         this.costMeter = costMeter;
         this.properties = properties;
         this.meterRegistry = meterRegistry;
+        this.traceFactory = traceFactory;
+        this.auditRecorder = auditRecorder;
         Gauge.builder("ai.gateway.active.streams", activeStreams, AtomicInteger::get)
                 .register(meterRegistry);
     }
@@ -95,51 +104,75 @@ public class DefaultAiGatewayService implements AiGatewayService {
         RoutePlan plan = createPlan(request);
         Instant occurredAt = Instant.now();
         long startedAt = System.nanoTime();
-        GatewayException lastFailure = null;
-        int reservedTokens = tokenReservation(request);
-        QuotaLease lease = quotaGuard.acquire(consumerId, plan.routeKey(),
-                plan.candidates().getFirst().model().modelKey(), false, reservedTokens);
+        try (GatewayTrace trace = traceFactory.start("chat", plan.requestId(), plan.routeKey(), consumerId)) {
+            audit(plan, consumerId, null, null, GatewayAuditEventType.REQUEST_ACCEPTED,
+                    null, null, trace, Map.of("stream", false, "candidateCount", plan.candidates().size()));
 
-        try {
-            for (int attemptIndex = 0; attemptIndex < plan.maxAttempts(); attemptIndex++) {
-                RouteCandidate candidate = plan.candidates().get(attemptIndex);
-                try {
-                    ModelProviderAdapter adapter = adapterRegistry.required(candidate.provider().providerType());
-                    ProviderResponse providerResponse = resilienceExecutor.execute(
-                            candidate,
-                            () -> adapter.call(request, candidate)
-                    );
-                    lease.settle(providerResponse.usage() == null ? null : providerResponse.usage().totalTokens());
-                    CostEstimate cost = costMeter
-                            .estimate(candidate.model().modelKey(), occurredAt, providerResponse.usage())
-                            .orElse(null);
-                    long durationMs = elapsedMillis(startedAt);
-                    usageRepository.record(plan.requestId(), consumerId, plan.routeKey(),
-                            candidate.provider().providerType().name(), candidate.model().modelKey(),
-                            providerResponse.usage(), cost, "SUCCESS", attemptIndex, durationMs, null);
-                    incrementRequestMetric(plan.routeKey(), candidate.model().modelKey(), "success");
-                    recordDurationMetric("ai.gateway.duration", plan.routeKey(), candidate.model().modelKey(), durationMs);
-                    log.info("AI Gateway 同步调用完成: requestId={}, route={}, model={}, attempts={}, durationMs={}",
-                            plan.requestId(), plan.routeKey(), candidate.model().modelKey(), attemptIndex + 1, durationMs);
-                    return toGatewayResponse(plan, candidate, providerResponse, cost, attemptIndex + 1);
-                } catch (Throwable failure) {
-                    lastFailure = ProviderExceptionMapper.map(failure);
-                    boolean canFallback = canFallback(plan, attemptIndex, lastFailure);
-                    log.warn("AI Gateway 模型尝试失败: requestId={}, route={}, model={}, attempt={}, code={}, fallback={}",
-                            plan.requestId(), plan.routeKey(), candidate.model().modelKey(), attemptIndex + 1,
-                            lastFailure.errorCode(), canFallback);
-                    if (!canFallback) {
-                        recordFailure(plan, consumerId, candidate, attemptIndex, startedAt, lastFailure);
-                        throw lastFailure;
-                    }
-                    incrementFallbackMetric(plan.routeKey(), lastFailure.errorCode().name());
-                }
+            int reservedTokens = tokenReservation(request);
+            QuotaLease lease;
+            try {
+                lease = quotaGuard.acquire(consumerId, plan.routeKey(),
+                        plan.candidates().getFirst().model().modelKey(), false, reservedTokens);
+            } catch (Throwable rejected) {
+                GatewayException failure = ProviderExceptionMapper.map(rejected);
+                trace.markError(failure);
+                audit(plan, consumerId, plan.candidates().getFirst(), 1,
+                        GatewayAuditEventType.REQUEST_REJECTED, failure.errorCode().name(),
+                        elapsedMillis(startedAt), trace, Map.of("stream", false));
+                throw failure;
             }
-            throw lastFailure == null
-                    ? new GatewayException(GatewayErrorCode.NO_AVAILABLE_MODEL, "没有可执行的路由候选")
-                    : lastFailure;
-        } finally {
-            lease.close();
+
+            GatewayException lastFailure = null;
+            try {
+                for (int attemptIndex = 0; attemptIndex < plan.maxAttempts(); attemptIndex++) {
+                    RouteCandidate candidate = plan.candidates().get(attemptIndex);
+                    audit(plan, consumerId, candidate, attemptIndex + 1,
+                            GatewayAuditEventType.ROUTE_SELECTED, null, null, trace,
+                            Map.of("stream", false, "candidateOrder", candidate.order()));
+                    try {
+                        ModelProviderAdapter adapter = adapterRegistry.required(candidate.provider().providerType());
+                        ProviderResponse providerResponse = trace.inScope(() -> resilienceExecutor.execute(
+                                candidate, () -> adapter.call(request, candidate)));
+                        lease.settle(providerResponse.usage() == null ? null : providerResponse.usage().totalTokens());
+                        CostEstimate cost = costMeter
+                                .estimate(candidate.model().modelKey(), occurredAt, providerResponse.usage())
+                                .orElse(null);
+                        long durationMs = elapsedMillis(startedAt);
+                        usageRepository.record(plan.requestId(), consumerId, plan.routeKey(),
+                                candidate.provider().providerType().name(), candidate.model().modelKey(),
+                                providerResponse.usage(), cost, "SUCCESS", attemptIndex, durationMs, null);
+                        incrementRequestMetric(plan.routeKey(), candidate.model().modelKey(), "success");
+                        recordDurationMetric("ai.gateway.duration", plan.routeKey(), candidate.model().modelKey(), durationMs);
+                        audit(plan, consumerId, candidate, attemptIndex + 1,
+                                GatewayAuditEventType.REQUEST_SUCCEEDED, null, durationMs, trace,
+                                Map.of("stream", false, "fallbackCount", attemptIndex));
+                        log.info("AI Gateway 同步调用完成: requestId={}, traceId={}, route={}, model={}, attempts={}, durationMs={}",
+                                plan.requestId(), trace.traceId(), plan.routeKey(), candidate.model().modelKey(),
+                                attemptIndex + 1, durationMs);
+                        return toGatewayResponse(plan, candidate, providerResponse, cost, attemptIndex + 1, trace.traceId());
+                    } catch (Throwable failure) {
+                        lastFailure = ProviderExceptionMapper.map(failure);
+                        boolean canFallback = canFallback(plan, attemptIndex, lastFailure);
+                        log.warn("AI Gateway 模型尝试失败: requestId={}, traceId={}, route={}, model={}, attempt={}, code={}, fallback={}",
+                                plan.requestId(), trace.traceId(), plan.routeKey(), candidate.model().modelKey(),
+                                attemptIndex + 1, lastFailure.errorCode(), canFallback);
+                        if (!canFallback) {
+                            trace.markError(lastFailure);
+                            recordFailure(plan, consumerId, candidate, attemptIndex, startedAt, lastFailure, trace);
+                            throw lastFailure;
+                        }
+                        incrementFallbackMetric(plan.routeKey(), lastFailure.errorCode().name());
+                        audit(plan, consumerId, candidate, attemptIndex + 1,
+                                GatewayAuditEventType.FALLBACK_TRIGGERED, lastFailure.errorCode().name(),
+                                elapsedMillis(startedAt), trace, Map.of("nextAttempt", attemptIndex + 2));
+                    }
+                }
+                throw lastFailure == null
+                        ? new GatewayException(GatewayErrorCode.NO_AVAILABLE_MODEL, "没有可执行的路由候选")
+                        : lastFailure;
+            } finally {
+                lease.close();
+            }
         }
     }
 
@@ -156,24 +189,46 @@ public class DefaultAiGatewayService implements AiGatewayService {
         Instant occurredAt = Instant.now();
         long startedAt = System.nanoTime();
         AtomicBoolean firstContentObserved = new AtomicBoolean();
-        QuotaLease lease = quotaGuard.acquire(consumerId, plan.routeKey(),
-                plan.candidates().getFirst().model().modelKey(), true, tokenReservation(request));
+        GatewayTrace trace = traceFactory.start("stream", plan.requestId(), plan.routeKey(), consumerId);
+        audit(plan, consumerId, null, null, GatewayAuditEventType.REQUEST_ACCEPTED,
+                null, null, trace, Map.of("stream", true, "candidateCount", plan.candidates().size()));
+
+        QuotaLease lease;
+        try {
+            lease = quotaGuard.acquire(consumerId, plan.routeKey(),
+                    plan.candidates().getFirst().model().modelKey(), true, tokenReservation(request));
+        } catch (Throwable rejected) {
+            GatewayException failure = ProviderExceptionMapper.map(rejected);
+            trace.markError(failure);
+            audit(plan, consumerId, plan.candidates().getFirst(), 1,
+                    GatewayAuditEventType.REQUEST_REJECTED, failure.errorCode().name(),
+                    elapsedMillis(startedAt), trace, Map.of("stream", true));
+            trace.close();
+            return Flux.error(failure);
+        }
         activeStreams.incrementAndGet();
 
         GatewayStreamEvent accepted = GatewayStreamEvent.of("gateway.accepted", Map.of(
                 "requestId", plan.requestId(),
-                "route", plan.routeKey()
+                "route", plan.routeKey(),
+                "traceId", trace.traceId()
         ));
         return Flux.concat(
                 Mono.just(accepted),
                 executeStreamAttempt(
-                        request, consumerId, plan, 0, occurredAt, startedAt, firstContentObserved, lease)
-        ).doFinally(ignored -> {
+                        request, consumerId, plan, 0, occurredAt, startedAt, firstContentObserved, lease, trace)
+        ).doFinally(signal -> {
+            // 客户端主动断开时不会产生 Provider 终止块，因此在资源释放阶段补一条取消审计。
+            if (signal == reactor.core.publisher.SignalType.CANCEL) {
+                audit(plan, consumerId, null, null, GatewayAuditEventType.STREAM_CANCELLED,
+                        null, elapsedMillis(startedAt), trace, Map.of("stream", true));
+            }
             lease.close();
             activeStreams.decrementAndGet();
             RouteCandidate initial = plan.candidates().getFirst();
             recordDurationMetric("ai.gateway.stream.duration", plan.routeKey(),
                     initial.model().modelKey(), elapsedMillis(startedAt));
+            trace.close();
         });
     }
 
@@ -191,10 +246,14 @@ public class DefaultAiGatewayService implements AiGatewayService {
             Instant occurredAt,
             long startedAt,
             AtomicBoolean firstContentObserved,
-            QuotaLease lease
+            QuotaLease lease,
+            GatewayTrace trace
     ) {
         RouteCandidate candidate = plan.candidates().get(attemptIndex);
         ModelProviderAdapter adapter = adapterRegistry.required(candidate.provider().providerType());
+        audit(plan, consumerId, candidate, attemptIndex + 1,
+                GatewayAuditEventType.ROUTE_SELECTED, null, null, trace,
+                Map.of("stream", true, "candidateOrder", candidate.order()));
         GatewayStreamEvent selected = GatewayStreamEvent.of("route.selected", Map.of(
                 "model", candidate.model().modelKey(),
                 "provider", candidate.provider().providerType().name(),
@@ -202,7 +261,7 @@ public class DefaultAiGatewayService implements AiGatewayService {
         ));
 
         Flux<ProviderStreamChunk> providerStream = resilienceExecutor
-                .protectStream(candidate, adapter.stream(request, candidate))
+                .protectStream(candidate, trace.inScope(() -> adapter.stream(request, candidate)))
                 // 只约束首个有效 Provider 事件；首事件之后由路由总时限和上游连接管理负责。
                 .timeout(
                         Mono.delay(plan.firstTokenTimeout()),
@@ -213,7 +272,7 @@ public class DefaultAiGatewayService implements AiGatewayService {
             if (firstSignal.hasError()) {
                 GatewayException failure = streamFailure(firstSignal.getThrowable());
                 return fallbackBeforeCommit(request, consumerId, plan, attemptIndex, occurredAt, startedAt,
-                        firstContentObserved, candidate, failure, lease);
+                        firstContentObserved, candidate, failure, lease, trace);
             }
             if (!firstSignal.hasValue() || firstSignal.get() == null || firstSignal.get().terminal()) {
                 GatewayException failure = new GatewayException(
@@ -221,17 +280,18 @@ public class DefaultAiGatewayService implements AiGatewayService {
                         "模型流在产生内容前结束"
                 );
                 return fallbackBeforeCommit(request, consumerId, plan, attemptIndex, occurredAt, startedAt,
-                        firstContentObserved, candidate, failure, lease);
+                        firstContentObserved, candidate, failure, lease, trace);
             }
 
             // 首个内容事件到达后即视为已提交；此后的失败只能发送错误事件，禁止拼接第二个模型。
             return wholeStream
                     .concatMap(chunk -> mapCommittedChunk(
                             plan, consumerId, candidate, attemptIndex, occurredAt, startedAt,
-                            firstContentObserved, chunk, lease))
+                            firstContentObserved, chunk, lease, trace))
                     .onErrorResume(failure -> {
                         GatewayException mapped = streamFailure(failure);
-                        recordFailure(plan, consumerId, candidate, attemptIndex, startedAt, mapped);
+                        trace.markError(mapped);
+                        recordFailure(plan, consumerId, candidate, attemptIndex, startedAt, mapped, trace);
                         return Flux.just(errorEvent(plan.requestId(), mapped), doneEvent());
                     });
         });
@@ -248,16 +308,21 @@ public class DefaultAiGatewayService implements AiGatewayService {
             AtomicBoolean firstContentObserved,
             RouteCandidate failedCandidate,
             GatewayException failure,
-            QuotaLease lease
+            QuotaLease lease,
+            GatewayTrace trace
     ) {
         if (canFallback(plan, attemptIndex, failure)) {
             incrementFallbackMetric(plan.routeKey(), failure.errorCode().name());
+            audit(plan, consumerId, failedCandidate, attemptIndex + 1,
+                    GatewayAuditEventType.FALLBACK_TRIGGERED, failure.errorCode().name(),
+                    elapsedMillis(startedAt), trace, Map.of("stream", true, "nextAttempt", attemptIndex + 2));
             log.warn("AI Gateway 流式首内容前切换候选: requestId={}, failedModel={}, nextAttempt={}, code={}",
                     plan.requestId(), failedCandidate.model().modelKey(), attemptIndex + 2, failure.errorCode());
             return executeStreamAttempt(request, consumerId, plan, attemptIndex + 1, occurredAt,
-                    startedAt, firstContentObserved, lease);
+                    startedAt, firstContentObserved, lease, trace);
         }
-        recordFailure(plan, consumerId, failedCandidate, attemptIndex, startedAt, failure);
+        trace.markError(failure);
+        recordFailure(plan, consumerId, failedCandidate, attemptIndex, startedAt, failure, trace);
         return Flux.just(errorEvent(plan.requestId(), failure), doneEvent());
     }
 
@@ -270,7 +335,8 @@ public class DefaultAiGatewayService implements AiGatewayService {
             long startedAt,
             AtomicBoolean firstContentObserved,
             ProviderStreamChunk chunk,
-            QuotaLease lease
+            QuotaLease lease,
+            GatewayTrace trace
     ) {
         if (chunk.hasContent()) {
             if (firstContentObserved.compareAndSet(false, true)) {
@@ -290,6 +356,9 @@ public class DefaultAiGatewayService implements AiGatewayService {
                     candidate.provider().providerType().name(), candidate.model().modelKey(),
                     usage, cost, "SUCCESS", attemptIndex, durationMs, null);
             incrementRequestMetric(plan.routeKey(), candidate.model().modelKey(), "success");
+            audit(plan, consumerId, candidate, attemptIndex + 1,
+                    GatewayAuditEventType.REQUEST_SUCCEEDED, null, durationMs, trace,
+                    Map.of("stream", true, "fallbackCount", attemptIndex));
 
             Map<String, Object> usageData = new java.util.LinkedHashMap<>();
             usageData.put("promptTokens", usage.promptTokens());
@@ -352,11 +421,13 @@ public class DefaultAiGatewayService implements AiGatewayService {
             RouteCandidate candidate,
             ProviderResponse response,
             CostEstimate cost,
-            int attempts
+            int attempts,
+            String traceId
     ) {
         ProviderUsage usage = response.usage() == null ? ProviderUsage.unavailable() : response.usage();
         return new GatewayChatResponse(
                 plan.requestId(),
+                traceId,
                 candidate.model().modelKey(),
                 candidate.provider().providerType().name(),
                 response.content(),
@@ -392,13 +463,41 @@ public class DefaultAiGatewayService implements AiGatewayService {
             RouteCandidate candidate,
             int attemptIndex,
             long startedAt,
-            GatewayException failure
+            GatewayException failure,
+            GatewayTrace trace
     ) {
         usageRepository.record(plan.requestId(), consumerId, plan.routeKey(),
                 candidate.provider().providerType().name(), candidate.model().modelKey(),
                 ProviderUsage.unavailable(), null, "FAILED", attemptIndex, elapsedMillis(startedAt),
                 failure.errorCode().name());
         incrementRequestMetric(plan.routeKey(), candidate.model().modelKey(), "failed");
+        audit(plan, consumerId, candidate, attemptIndex + 1,
+                GatewayAuditEventType.REQUEST_FAILED, failure.errorCode().name(),
+                elapsedMillis(startedAt), trace, Map.of("retryable", failure.retryable()));
+    }
+
+    /**
+     * 将路由候选转换为统一审计字段。
+     *
+     * <p>这里刻意不接收请求 DTO，因此调用方无法顺手把 messages 或模型回复写进审计表。</p>
+     */
+    private void audit(
+            RoutePlan plan,
+            String consumerId,
+            RouteCandidate candidate,
+            Integer attempt,
+            GatewayAuditEventType eventType,
+            String errorCode,
+            Long durationMs,
+            GatewayTrace trace,
+            Map<String, Object> metadata
+    ) {
+        auditRecorder.record(
+                eventType, plan.requestId(), consumerId, plan.routeKey(),
+                candidate == null ? null : candidate.provider().providerType().name(),
+                candidate == null ? null : candidate.model().modelKey(),
+                attempt, errorCode, durationMs, trace, metadata
+        );
     }
 
     private GatewayStreamEvent errorEvent(String requestId, GatewayException failure) {

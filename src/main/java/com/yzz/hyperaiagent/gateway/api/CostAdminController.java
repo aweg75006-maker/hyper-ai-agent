@@ -1,7 +1,9 @@
 package com.yzz.hyperaiagent.gateway.api;
 
 import com.yzz.hyperaiagent.gateway.api.dto.GatewayAdminRequests.SavePrice;
+import com.yzz.hyperaiagent.gateway.application.GatewayAuditRecorder;
 import com.yzz.hyperaiagent.gateway.domain.metering.ModelPrice;
+import com.yzz.hyperaiagent.gateway.domain.observability.GatewayAuditEventType;
 import com.yzz.hyperaiagent.gateway.domain.registry.ModelRegistry;
 import com.yzz.hyperaiagent.gateway.infrastructure.persistence.GatewayPriceRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,15 +28,18 @@ public class CostAdminController {
     private final AdminAccessGuard accessGuard;
     private final GatewayPriceRepository priceRepository;
     private final ModelRegistry registry;
+    private final GatewayAuditRecorder auditRecorder;
 
     public CostAdminController(
             AdminAccessGuard accessGuard,
             GatewayPriceRepository priceRepository,
-            ModelRegistry registry
+            ModelRegistry registry,
+            GatewayAuditRecorder auditRecorder
     ) {
         this.accessGuard = accessGuard;
         this.priceRepository = priceRepository;
         this.registry = registry;
+        this.auditRecorder = auditRecorder;
     }
 
     @PostMapping("/prices")
@@ -54,6 +59,11 @@ public class CostAdminController {
                 request.inputPrice(), request.outputPrice(), request.effectiveFrom(), request.effectiveTo()
         );
         priceRepository.add(price);
+        auditRecorder.recordAdmin(GatewayAuditEventType.PRICE_CONFIG_CHANGED, request.id(), Map.of(
+                "modelKey", request.modelKey(),
+                "currency", request.currency(),
+                "unitTokens", request.unitTokens()
+        ));
         return price;
     }
 

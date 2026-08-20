@@ -11,6 +11,9 @@ spring:
     baseline-on-migrate: true
     baseline-version: 0
     locations: classpath:db/migration
+  reactor:
+    # Reactor 切换线程时自动恢复 Observation/Trace 上下文，保证流式请求不会丢失 traceId。
+    context-propagation: auto
   ai:
     # Spring AI Alibaba 1.1.x 要求显式选择自动配置的模型 Provider。
     model:
@@ -43,6 +46,13 @@ ai:
     max-output-tokens: 8192
 
 management:
+  tracing:
+    sampling:
+      # 本地开发阶段需要完整验证审计链路；生产环境可按吞吐量调低采样率。
+      probability: 1.0
+  opentelemetry:
+    resource-attributes:
+      service.name: ${spring.application.name}
   endpoints:
     web:
       exposure:

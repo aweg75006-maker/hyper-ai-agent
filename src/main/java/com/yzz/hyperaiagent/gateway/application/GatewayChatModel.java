@@ -4,6 +4,9 @@ import com.yzz.hyperaiagent.gateway.domain.model.ModelCapability;
 import com.yzz.hyperaiagent.gateway.config.AiGatewayProperties;
 import com.yzz.hyperaiagent.gateway.domain.metering.CostEstimate;
 import com.yzz.hyperaiagent.gateway.domain.metering.CostMeter;
+import com.yzz.hyperaiagent.gateway.domain.observability.GatewayAuditEventType;
+import com.yzz.hyperaiagent.gateway.domain.observability.GatewayTrace;
+import com.yzz.hyperaiagent.gateway.domain.observability.GatewayTraceFactory;
 import com.yzz.hyperaiagent.gateway.domain.quota.GatewayQuotaGuard;
 import com.yzz.hyperaiagent.gateway.domain.quota.GatewayQuotaGuard.QuotaLease;
 import com.yzz.hyperaiagent.gateway.domain.registry.ModelRegistry;
@@ -32,6 +35,7 @@ import reactor.core.publisher.SignalType;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -54,6 +58,8 @@ public class GatewayChatModel implements ChatModel {
     private final CostMeter costMeter;
     private final AiGatewayProperties properties;
     private final MeterRegistry meterRegistry;
+    private final GatewayTraceFactory traceFactory;
+    private final GatewayAuditRecorder auditRecorder;
 
     public GatewayChatModel(
             String routeKey,
@@ -65,7 +71,9 @@ public class GatewayChatModel implements ChatModel {
             GatewayUsageRepository usageRepository,
             CostMeter costMeter,
             AiGatewayProperties properties,
-            MeterRegistry meterRegistry
+            MeterRegistry meterRegistry,
+            GatewayTraceFactory traceFactory,
+            GatewayAuditRecorder auditRecorder
     ) {
         this.routeKey = routeKey;
         this.registry = registry;
@@ -77,6 +85,8 @@ public class GatewayChatModel implements ChatModel {
         this.costMeter = costMeter;
         this.properties = properties;
         this.meterRegistry = meterRegistry;
+        this.traceFactory = traceFactory;
+        this.auditRecorder = auditRecorder;
     }
 
     @Override
@@ -84,35 +94,47 @@ public class GatewayChatModel implements ChatModel {
         RoutePlan plan = plan(prompt, false);
         Instant occurredAt = Instant.now();
         long startedAt = System.nanoTime();
-        QuotaLease lease = quotaGuard.acquire(
-                properties.defaultConsumerId(), plan.routeKey(),
-                plan.candidates().getFirst().model().modelKey(), false, tokenReservation(prompt)
-        );
-        GatewayException lastFailure = null;
-        try {
-            for (int index = 0; index < plan.maxAttempts(); index++) {
-                RouteCandidate candidate = plan.candidates().get(index);
-                try {
-                    ModelProviderAdapter adapter = adapters.required(candidate.provider().providerType());
-                    ChatResponse response = resilienceExecutor.execute(candidate, () -> adapter.call(prompt, candidate));
-                    ProviderUsage usage = usage(response);
-                    lease.settle(usage.totalTokens());
-                    record(plan, candidate, usage, occurredAt, "SUCCESS", index, startedAt, null);
-                    return response;
-                } catch (Throwable failure) {
-                    lastFailure = ProviderExceptionMapper.map(failure);
-                    if (!canFallback(plan, index, lastFailure)) {
-                        record(plan, candidate, ProviderUsage.unavailable(), occurredAt,
-                                "FAILED", index, startedAt, lastFailure.errorCode().name());
-                        throw lastFailure;
+        String consumerId = properties.defaultConsumerId();
+        try (GatewayTrace trace = traceFactory.start("internal.chat", plan.requestId(), plan.routeKey(), consumerId)) {
+            audit(plan, null, null, GatewayAuditEventType.REQUEST_ACCEPTED,
+                    null, null, trace, Map.of("stream", false, "internal", true));
+            QuotaLease lease = quotaGuard.acquire(
+                    consumerId, plan.routeKey(),
+                    plan.candidates().getFirst().model().modelKey(), false, tokenReservation(prompt)
+            );
+            GatewayException lastFailure = null;
+            try {
+                for (int index = 0; index < plan.maxAttempts(); index++) {
+                    RouteCandidate candidate = plan.candidates().get(index);
+                    audit(plan, candidate, index + 1, GatewayAuditEventType.ROUTE_SELECTED,
+                            null, null, trace, Map.of("stream", false, "internal", true));
+                    try {
+                        ModelProviderAdapter adapter = adapters.required(candidate.provider().providerType());
+                        ChatResponse response = trace.inScope(() -> resilienceExecutor.execute(
+                                candidate, () -> adapter.call(prompt, candidate)));
+                        ProviderUsage usage = usage(response);
+                        lease.settle(usage.totalTokens());
+                        record(plan, candidate, usage, occurredAt, "SUCCESS", index, startedAt, null, trace);
+                        return response;
+                    } catch (Throwable failure) {
+                        lastFailure = ProviderExceptionMapper.map(failure);
+                        if (!canFallback(plan, index, lastFailure)) {
+                            trace.markError(lastFailure);
+                            record(plan, candidate, ProviderUsage.unavailable(), occurredAt,
+                                    "FAILED", index, startedAt, lastFailure.errorCode().name(), trace);
+                            throw lastFailure;
+                        }
+                        audit(plan, candidate, index + 1, GatewayAuditEventType.FALLBACK_TRIGGERED,
+                                lastFailure.errorCode().name(), elapsedMillis(startedAt), trace,
+                                Map.of("stream", false, "internal", true, "nextAttempt", index + 2));
                     }
                 }
+                throw lastFailure == null
+                        ? new GatewayException(GatewayErrorCode.NO_AVAILABLE_MODEL, "没有可执行的模型候选")
+                        : lastFailure;
+            } finally {
+                lease.close();
             }
-            throw lastFailure == null
-                    ? new GatewayException(GatewayErrorCode.NO_AVAILABLE_MODEL, "没有可执行的模型候选")
-                    : lastFailure;
-        } finally {
-            lease.close();
         }
     }
 
@@ -127,15 +149,26 @@ public class GatewayChatModel implements ChatModel {
         RoutePlan plan = plan(prompt, true);
         Instant occurredAt = Instant.now();
         long startedAt = System.nanoTime();
-        QuotaLease lease = quotaGuard.acquire(
-                properties.defaultConsumerId(), plan.routeKey(),
-                plan.candidates().getFirst().model().modelKey(), true, tokenReservation(prompt)
-        );
+        String consumerId = properties.defaultConsumerId();
+        GatewayTrace trace = traceFactory.start("internal.stream", plan.requestId(), plan.routeKey(), consumerId);
+        audit(plan, null, null, GatewayAuditEventType.REQUEST_ACCEPTED,
+                null, null, trace, Map.of("stream", true, "internal", true));
+        QuotaLease lease;
+        try {
+            lease = quotaGuard.acquire(
+                    consumerId, plan.routeKey(),
+                    plan.candidates().getFirst().model().modelKey(), true, tokenReservation(prompt)
+            );
+        } catch (Throwable rejected) {
+            trace.markError(rejected);
+            trace.close();
+            return Flux.error(rejected);
+        }
         AtomicReference<RouteCandidate> selectedCandidate = new AtomicReference<>();
         AtomicReference<ProviderUsage> lastUsage = new AtomicReference<>(ProviderUsage.unavailable());
         AtomicReference<GatewayException> lastFailure = new AtomicReference<>();
 
-        return streamAttempt(prompt, plan, 0, selectedCandidate, lastUsage)
+        return streamAttempt(prompt, plan, 0, selectedCandidate, lastUsage, trace)
                 .doOnError(failure -> lastFailure.set(ProviderExceptionMapper.map(failure)))
                 .doFinally(signal -> {
                     lease.settle(lastUsage.get().totalTokens());
@@ -147,7 +180,8 @@ public class GatewayChatModel implements ChatModel {
                             : signal == SignalType.CANCEL ? "CANCELLED" : "FAILED";
                     String errorCode = lastFailure.get() == null ? null : lastFailure.get().errorCode().name();
                     record(plan, candidate, lastUsage.get(), occurredAt, result,
-                            Math.max(0, candidate.order() - 1), startedAt, errorCode);
+                            Math.max(0, candidate.order() - 1), startedAt, errorCode, trace);
+                    trace.close();
                 });
     }
 
@@ -156,12 +190,15 @@ public class GatewayChatModel implements ChatModel {
             RoutePlan plan,
             int attemptIndex,
             AtomicReference<RouteCandidate> selectedCandidate,
-            AtomicReference<ProviderUsage> lastUsage
+            AtomicReference<ProviderUsage> lastUsage,
+            GatewayTrace trace
     ) {
         RouteCandidate candidate = plan.candidates().get(attemptIndex);
         ModelProviderAdapter adapter = adapters.required(candidate.provider().providerType());
+        audit(plan, candidate, attemptIndex + 1, GatewayAuditEventType.ROUTE_SELECTED,
+                null, null, trace, Map.of("stream", true, "internal", true));
         Flux<ChatResponse> source = resilienceExecutor
-                .protectStream(candidate, adapter.stream(prompt, candidate))
+                .protectStream(candidate, trace.inScope(() -> adapter.stream(prompt, candidate)))
                 .doOnNext(response -> lastUsage.set(usage(response)))
                 // 空的元数据增量不会触发流提交，避免首内容前故障无法 Fallback。
                 .filter(this::isCommittedPayload)
@@ -171,7 +208,10 @@ public class GatewayChatModel implements ChatModel {
             if (firstSignal.hasError()) {
                 GatewayException failure = ProviderExceptionMapper.map(firstSignal.getThrowable());
                 if (canFallback(plan, attemptIndex, failure)) {
-                    return streamAttempt(prompt, plan, attemptIndex + 1, selectedCandidate, lastUsage);
+                    audit(plan, candidate, attemptIndex + 1, GatewayAuditEventType.FALLBACK_TRIGGERED,
+                            failure.errorCode().name(), null, trace,
+                            Map.of("stream", true, "internal", true, "nextAttempt", attemptIndex + 2));
+                    return streamAttempt(prompt, plan, attemptIndex + 1, selectedCandidate, lastUsage, trace);
                 }
                 return Flux.error(failure);
             }
@@ -181,7 +221,10 @@ public class GatewayChatModel implements ChatModel {
                         "模型流在产生内容前结束"
                 );
                 if (canFallback(plan, attemptIndex, failure)) {
-                    return streamAttempt(prompt, plan, attemptIndex + 1, selectedCandidate, lastUsage);
+                    audit(plan, candidate, attemptIndex + 1, GatewayAuditEventType.FALLBACK_TRIGGERED,
+                            failure.errorCode().name(), null, trace,
+                            Map.of("stream", true, "internal", true, "nextAttempt", attemptIndex + 2));
+                    return streamAttempt(prompt, plan, attemptIndex + 1, selectedCandidate, lastUsage, trace);
                 }
                 return Flux.error(failure);
             }
@@ -248,18 +291,49 @@ public class GatewayChatModel implements ChatModel {
             String result,
             int fallbackCount,
             long startedAt,
-            String errorCode
+            String errorCode,
+            GatewayTrace trace
     ) {
         CostEstimate cost = costMeter.estimate(candidate.model().modelKey(), occurredAt, usage).orElse(null);
         long durationMs = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
         usageRepository.record(plan.requestId(), properties.defaultConsumerId(), plan.routeKey(),
                 candidate.provider().providerType().name(), candidate.model().modelKey(), usage, cost,
                 result, fallbackCount, durationMs, errorCode);
+        GatewayAuditEventType eventType = "SUCCESS".equals(result)
+                ? GatewayAuditEventType.REQUEST_SUCCEEDED
+                : "CANCELLED".equals(result)
+                ? GatewayAuditEventType.STREAM_CANCELLED
+                : GatewayAuditEventType.REQUEST_FAILED;
+        audit(plan, candidate, candidate.order(), eventType, errorCode, durationMs, trace,
+                Map.of("internal", true, "fallbackCount", fallbackCount));
         Counter.builder("ai.gateway.internal.requests")
                 .tag("route", plan.routeKey())
                 .tag("model", candidate.model().modelKey())
                 .tag("result", result.toLowerCase(java.util.Locale.ROOT))
                 .register(meterRegistry)
                 .increment();
+    }
+
+    /** 旧业务接口和统一 Gateway API 使用相同的审计字段，便于运行中心统一查询。 */
+    private void audit(
+            RoutePlan plan,
+            RouteCandidate candidate,
+            Integer attempt,
+            GatewayAuditEventType eventType,
+            String errorCode,
+            Long durationMs,
+            GatewayTrace trace,
+            Map<String, Object> metadata
+    ) {
+        auditRecorder.record(
+                eventType, plan.requestId(), properties.defaultConsumerId(), plan.routeKey(),
+                candidate == null ? null : candidate.provider().providerType().name(),
+                candidate == null ? null : candidate.model().modelKey(),
+                attempt, errorCode, durationMs, trace, metadata
+        );
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
     }
 }

@@ -3,6 +3,7 @@ package com.yzz.hyperaiagent.gateway.application;
 import com.yzz.hyperaiagent.gateway.domain.registry.ModelRegistry;
 import com.yzz.hyperaiagent.gateway.config.AiGatewayProperties;
 import com.yzz.hyperaiagent.gateway.domain.metering.CostMeter;
+import com.yzz.hyperaiagent.gateway.domain.observability.GatewayTraceFactory;
 import com.yzz.hyperaiagent.gateway.domain.quota.GatewayQuotaGuard;
 import com.yzz.hyperaiagent.gateway.domain.resilience.ProviderResilienceExecutor;
 import com.yzz.hyperaiagent.gateway.domain.routing.RouteEngine;
@@ -30,6 +31,8 @@ public class GatewayChatModelFactory {
     private final CostMeter costMeter;
     private final AiGatewayProperties properties;
     private final MeterRegistry meterRegistry;
+    private final GatewayTraceFactory traceFactory;
+    private final GatewayAuditRecorder auditRecorder;
 
     public GatewayChatModelFactory(
             ModelRegistry registry,
@@ -40,7 +43,9 @@ public class GatewayChatModelFactory {
             GatewayUsageRepository usageRepository,
             CostMeter costMeter,
             AiGatewayProperties properties,
-            MeterRegistry meterRegistry
+            MeterRegistry meterRegistry,
+            GatewayTraceFactory traceFactory,
+            GatewayAuditRecorder auditRecorder
     ) {
         this.registry = registry;
         this.routeEngine = routeEngine;
@@ -51,12 +56,15 @@ public class GatewayChatModelFactory {
         this.costMeter = costMeter;
         this.properties = properties;
         this.meterRegistry = meterRegistry;
+        this.traceFactory = traceFactory;
+        this.auditRecorder = auditRecorder;
     }
 
     public ChatModel create(String routeKey) {
         return new GatewayChatModel(
                 routeKey, registry, routeEngine, adapters, resilienceExecutor,
-                quotaGuard, usageRepository, costMeter, properties, meterRegistry
+                quotaGuard, usageRepository, costMeter, properties, meterRegistry,
+                traceFactory, auditRecorder
         );
     }
 }

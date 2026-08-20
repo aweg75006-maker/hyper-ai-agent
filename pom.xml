@@ -69,6 +69,15 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!--
+            将 Spring MVC / Reactor 的 Observation 桥接为 OpenTelemetry Span。
+            当前阶段由网关把 traceId、spanId 写入审计表；后续接入 OTLP Collector 时无需改业务代码。
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

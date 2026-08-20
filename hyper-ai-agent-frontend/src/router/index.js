@@ -4,6 +4,9 @@ import PsychologyChat from '../views/PsychologyChat.vue'
 import ManusChat from '../views/ManusChat.vue'
 import ChatAssistant from '../views/ChatAssistant.vue'
 import ChatPDF from '../views/ChatPDF.vue'
+import OperationCenter from '../views/OperationCenter.vue'
+import ModelManagement from '../views/ModelManagement.vue'
+import RouteManagement from '../views/RouteManagement.vue'
 
 const routes = [
   {
@@ -30,6 +33,21 @@ const routes = [
     path: '/pdf',
     name: 'ChatPDF',
     component: ChatPDF
+  },
+  {
+    path: '/operations',
+    name: 'OperationCenter',
+    component: OperationCenter
+  },
+  {
+    path: '/models',
+    name: 'ModelManagement',
+    component: ModelManagement
+  },
+  {
+    path: '/routes',
+    name: 'RouteManagement',
+    component: RouteManagement
   }
 ]
 

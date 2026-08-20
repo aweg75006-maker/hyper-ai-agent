@@ -1,5 +1,6 @@
 package com.yzz.hyperaiagent.gateway;
 
+import com.yzz.hyperaiagent.gateway.application.GatewayAuditRecorder;
 import com.yzz.hyperaiagent.gateway.domain.quota.GatewayApiKeyService;
 import com.yzz.hyperaiagent.gateway.domain.quota.GatewayApiKeyService.IssuedApiKey;
 import com.yzz.hyperaiagent.gateway.infrastructure.persistence.GatewayConsumerRepository;
@@ -16,7 +17,7 @@ class GatewayApiKeyServiceTest {
     @Test
     void databaseMustReceiveHashInsteadOfPlaintextApiKey() {
         GatewayConsumerRepository repository = mock(GatewayConsumerRepository.class);
-        GatewayApiKeyService service = new GatewayApiKeyService(repository);
+        GatewayApiKeyService service = new GatewayApiKeyService(repository, mock(GatewayAuditRecorder.class));
 
         IssuedApiKey issued = service.create("测试调用方");
 

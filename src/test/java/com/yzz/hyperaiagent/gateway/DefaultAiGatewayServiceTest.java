@@ -4,6 +4,7 @@ import com.yzz.hyperaiagent.gateway.api.dto.GatewayChatRequest;
 import com.yzz.hyperaiagent.gateway.api.dto.GatewayChatResponse;
 import com.yzz.hyperaiagent.gateway.api.dto.GatewayStreamEvent;
 import com.yzz.hyperaiagent.gateway.application.DefaultAiGatewayService;
+import com.yzz.hyperaiagent.gateway.application.GatewayAuditRecorder;
 import com.yzz.hyperaiagent.gateway.config.AiGatewayProperties;
 import com.yzz.hyperaiagent.gateway.domain.model.ModelCapability;
 import com.yzz.hyperaiagent.gateway.domain.model.ModelRegistration;
@@ -11,6 +12,8 @@ import com.yzz.hyperaiagent.gateway.domain.model.ProviderAccount;
 import com.yzz.hyperaiagent.gateway.domain.model.ProviderStatus;
 import com.yzz.hyperaiagent.gateway.domain.model.ProviderType;
 import com.yzz.hyperaiagent.gateway.domain.model.RoutePolicy;
+import com.yzz.hyperaiagent.gateway.domain.observability.GatewayTrace;
+import com.yzz.hyperaiagent.gateway.domain.observability.GatewayTraceFactory;
 import com.yzz.hyperaiagent.gateway.domain.metering.CostMeter;
 import com.yzz.hyperaiagent.gateway.domain.quota.GatewayQuotaGuard;
 import com.yzz.hyperaiagent.gateway.domain.quota.GatewayQuotaGuard.QuotaLease;
@@ -40,9 +43,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -120,6 +125,12 @@ class DefaultAiGatewayServiceTest {
                 .thenReturn(lease);
 
         AiGatewayProperties properties = properties();
+        GatewayTrace trace = mock(GatewayTrace.class);
+        when(trace.traceId()).thenReturn("0123456789abcdef0123456789abcdef");
+        when(trace.inScope(any())).thenAnswer(invocation ->
+                ((Supplier<?>) invocation.getArgument(0)).get());
+        GatewayTraceFactory traceFactory = mock(GatewayTraceFactory.class);
+        when(traceFactory.start(anyString(), anyString(), anyString(), anyString())).thenReturn(trace);
         DefaultAiGatewayService service = new DefaultAiGatewayService(
                 registry,
                 new RouteEngine(),
@@ -129,7 +140,9 @@ class DefaultAiGatewayServiceTest {
                 new ProviderResilienceExecutor(properties),
                 mock(CostMeter.class),
                 properties,
-                new SimpleMeterRegistry()
+                new SimpleMeterRegistry(),
+                traceFactory,
+                mock(GatewayAuditRecorder.class)
         );
         return new TestContext(service, lease);
     }

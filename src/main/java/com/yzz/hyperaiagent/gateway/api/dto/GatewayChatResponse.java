@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 /** 同步网关响应；费用未知时 estimatedCost 为 null，而不是伪造为 0。 */
 public record GatewayChatResponse(
         String requestId,
+        String traceId,
         String model,
         String provider,
         String content,

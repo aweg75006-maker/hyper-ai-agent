@@ -11,6 +11,10 @@
         <button class="nav-item active" type="button"><span class="nav-symbol">⌂</span>应用中心</button>
         <button class="nav-item" type="button" @click="goToAssistant"><span class="nav-symbol">◫</span>会话助手</button>
         <button class="nav-item" type="button" @click="goToPDF"><span class="nav-symbol">▤</span>知识问答</button>
+        <div class="nav-label platform-label">Control plane</div>
+        <button class="nav-item" type="button" @click="goToOperations"><span class="nav-symbol">⌁</span>运行中心</button>
+        <button class="nav-item" type="button" @click="goToModels"><span class="nav-symbol">◉</span>模型管理</button>
+        <button class="nav-item" type="button" @click="goToRoutes"><span class="nav-symbol">⑂</span>路由策略</button>
       </nav>
 
       <div class="sidebar-foot">
@@ -106,7 +110,10 @@ export default {
     goToPsychology() { this.$router.push('/psychology') },
     goToManus() { this.$router.push('/manus') },
     goToAssistant() { this.$router.push('/assistant') },
-    goToPDF() { this.$router.push('/pdf') }
+    goToPDF() { this.$router.push('/pdf') },
+    goToOperations() { this.$router.push('/operations') },
+    goToModels() { this.$router.push('/models') },
+    goToRoutes() { this.$router.push('/routes') }
   }
 }
 </script>

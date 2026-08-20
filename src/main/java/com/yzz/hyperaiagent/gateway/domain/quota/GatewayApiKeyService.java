@@ -1,5 +1,7 @@
 package com.yzz.hyperaiagent.gateway.domain.quota;
 
+import com.yzz.hyperaiagent.gateway.application.GatewayAuditRecorder;
+import com.yzz.hyperaiagent.gateway.domain.observability.GatewayAuditEventType;
 import com.yzz.hyperaiagent.gateway.infrastructure.persistence.GatewayConsumerRepository;
 import org.springframework.stereotype.Service;
 
@@ -9,6 +11,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Map;
 import java.util.UUID;
 
 /** Gateway 调用方 Key 的签发与不可逆摘要服务。 */
@@ -17,21 +20,31 @@ public class GatewayApiKeyService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private final GatewayConsumerRepository repository;
+    private final GatewayAuditRecorder auditRecorder;
 
-    public GatewayApiKeyService(GatewayConsumerRepository repository) {
+    public GatewayApiKeyService(
+            GatewayConsumerRepository repository,
+            GatewayAuditRecorder auditRecorder
+    ) {
         this.repository = repository;
+        this.auditRecorder = auditRecorder;
     }
 
     public IssuedApiKey create(String name) {
         String consumerId = "consumer-" + UUID.randomUUID().toString().replace("-", "");
         String apiKey = generateApiKey();
         repository.createConsumer(consumerId, name, hash(apiKey), prefix(apiKey));
+        // 审计中只保存不可用于认证的短前缀，绝不保存明文 Key 或完整哈希。
+        auditRecorder.recordAdmin(GatewayAuditEventType.API_KEY_CREATED, consumerId,
+                Map.of("keyPrefix", prefix(apiKey)));
         return new IssuedApiKey(consumerId, apiKey, prefix(apiKey));
     }
 
     public IssuedApiKey rotate(String consumerId) {
         String apiKey = generateApiKey();
         repository.rotateKey(consumerId, hash(apiKey), prefix(apiKey));
+        auditRecorder.recordAdmin(GatewayAuditEventType.API_KEY_ROTATED, consumerId,
+                Map.of("keyPrefix", prefix(apiKey)));
         return new IssuedApiKey(consumerId, apiKey, prefix(apiKey));
     }
 

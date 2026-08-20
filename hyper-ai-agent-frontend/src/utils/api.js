@@ -2,6 +2,9 @@ import axios from 'axios'
 
 const API_BASE_URL = 'http://localhost:8123/api'
 
+// 管理接口仅在 local Profile + 环回地址下开放，前端不保存额外管理令牌。
+const GATEWAY_ADMIN_BASE_URL = `${API_BASE_URL}/gateway/admin`
+
 /**
  * 调用心理咨询SSE接口
  * @param {string} message - 用户消息
@@ -218,6 +221,97 @@ export async function getChatHistory(type, chatId) {
  */
 export function generateChatId() {
   return `chat_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+}
+
+/**
+ * 生成运行中心通用的 ISO 时间范围。
+ * @param {number} hours - 向前查询的小时数
+ */
+export function gatewayTimeRange(hours = 24) {
+  const to = new Date()
+  const from = new Date(to.getTime() - hours * 60 * 60 * 1000)
+  return { from: from.toISOString(), to: to.toISOString() }
+}
+
+/** 获取 Gateway 运行概览。 */
+export async function getGatewayOverview(range) {
+  const response = await axios.get(`${GATEWAY_ADMIN_BASE_URL}/observability/overview`, { params: range })
+  return response.data
+}
+
+/** 获取按小时或按天聚合的请求趋势。 */
+export async function getGatewaySeries(range, bucket = 'HOUR') {
+  const response = await axios.get(`${GATEWAY_ADMIN_BASE_URL}/observability/series`, {
+    params: { ...range, bucket }
+  })
+  return response.data
+}
+
+/** 获取模型或路由维度的用量统计。 */
+export async function getGatewayDimensions(range, groupBy = 'MODEL') {
+  const response = await axios.get(`${GATEWAY_ADMIN_BASE_URL}/observability/dimensions`, {
+    params: { ...range, groupBy }
+  })
+  return response.data
+}
+
+/** 获取最近审计事件，审计记录不包含 Prompt 和模型回复。 */
+export async function getGatewayAuditEvents(range, limit = 30, eventType = '') {
+  const params = { ...range, limit }
+  if (eventType) {
+    params.eventType = eventType
+  }
+  const response = await axios.get(`${GATEWAY_ADMIN_BASE_URL}/observability/audit-events`, { params })
+  return response.data
+}
+
+/** 根据 traceId 下钻一次请求的完整治理事件。 */
+export async function getGatewayTrace(traceId) {
+  const response = await axios.get(`${GATEWAY_ADMIN_BASE_URL}/observability/trace`, {
+    params: { traceId }
+  })
+  return response.data
+}
+
+/** 获取 Provider、模型和路由配置。 */
+export async function getGatewayProviders() {
+  return (await axios.get(`${GATEWAY_ADMIN_BASE_URL}/providers`)).data
+}
+
+export async function getGatewayModels() {
+  return (await axios.get(`${GATEWAY_ADMIN_BASE_URL}/models`)).data
+}
+
+export async function getGatewayRoutes() {
+  return (await axios.get(`${GATEWAY_ADMIN_BASE_URL}/routes`)).data
+}
+
+/** 创建或更新一个模型注册项。 */
+export async function saveGatewayModel(model) {
+  return (await axios.post(`${GATEWAY_ADMIN_BASE_URL}/models`, model)).data
+}
+
+/** 显式启停模型，避免前端自行拼装部分更新造成字段丢失。 */
+export async function setGatewayModelEnabled(modelKey, enabled) {
+  const action = enabled ? 'enable' : 'disable'
+  return (await axios.post(`${GATEWAY_ADMIN_BASE_URL}/models/${encodeURIComponent(modelKey)}/${action}`)).data
+}
+
+/** 创建或更新路由；后端会校验模型引用并原子刷新注册表快照。 */
+export async function saveGatewayRoute(route, exists) {
+  const encodedKey = encodeURIComponent(route.routeKey)
+  const response = exists
+    ? await axios.put(`${GATEWAY_ADMIN_BASE_URL}/routes/${encodedKey}`, route)
+    : await axios.post(`${GATEWAY_ADMIN_BASE_URL}/routes`, route)
+  return response.data
+}
+
+/** 只读模拟路由，不会调用真实模型，也不会消耗 Token。 */
+export async function simulateGatewayRoute(routeKey, payload) {
+  return (await axios.post(
+    `${GATEWAY_ADMIN_BASE_URL}/routes/${encodeURIComponent(routeKey)}/simulate`,
+    payload
+  )).data
 }
 
 /**
