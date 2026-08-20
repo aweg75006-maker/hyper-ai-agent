@@ -93,23 +93,61 @@ class ToolCallAgentRuntimeTest {
     }
 
     @Test
-    void terminateToolShouldRequireStructuredFinalSummary() throws Exception {
+    void terminateToolShouldOnlyCarryLifecycleSignal() throws Exception {
         ToolCallback terminateCallback = ToolCallbacks.from(new TerminateTool())[0];
         String inputSchema = terminateCallback.getToolDefinition().inputSchema();
         JsonNode schema = new ObjectMapper().readTree(inputSchema);
 
-        // 最终结论必须成为工具协议的必填参数，不能只依赖模型自觉遵守提示词。
-        assertTrue(schema.path("properties").has("finalSummary"));
-        assertTrue(schema.path("required").isArray());
-        assertEquals("finalSummary", schema.path("required").get(0).asText());
+        // 终止工具只切换生命周期，不再用长文本参数承载最终答案。
+        assertTrue(schema.path("properties").isObject());
+        assertEquals(0, schema.path("properties").size());
 
-        String result = terminateCallback.call("""
-                {"finalSummary":"已完成三点 Java 后端学习总结。"}
-                """);
-        assertEquals("任务结束，最终结论已提交", new ObjectMapper().readTree(result).asText());
+        String result = terminateCallback.call("{}");
+        assertEquals("已收到终止信号", new ObjectMapper().readTree(result).asText());
+    }
+
+    @Test
+    void terminateToolShouldGenerateDeliverableInsteadOfPublishingPhasePlan() {
+        ToolCallback[] callbacks = ToolCallbacks.from(new TerminateTool());
+        TestableToolCallAgent agent = new TestableToolCallAgent(callbacks);
+        agent.generatedFinalAnswer = "西湖半日游建议：上午游览断桥与白堤，午后乘船前往三潭印月。";
+        List<AgentRunEvent> events = new ArrayList<>();
+        agent.setRunContext(new AgentRunContext(
+                "run_terminate_test",
+                new AtomicBoolean(false),
+                events::add
+        ));
+        agent.setState(AgentState.RUNNING);
+        agent.setCurrentStep(2);
+
+        AssistantMessage.ToolCall terminateCall = new AssistantMessage.ToolCall(
+                "call-terminate",
+                "function",
+                "doTerminate",
+                "{}"
+        );
+        AssistantMessage assistantMessage = AssistantMessage.builder()
+                .content("信息已经足够，下一步准备整理最终攻略。")
+                .toolCalls(List.of(terminateCall))
+                .build();
+        agent.setToolCallChatResponse(new ChatResponse(List.of(new Generation(assistantMessage))));
+
+        agent.act();
+
+        assertTrue(agent.finalizerCalled);
+        assertEquals(AgentState.FINISHED, agent.getState());
+        AgentRunEvent finalEvent = events.stream()
+                .filter(event -> event.type() == AgentRunEventType.FINAL_SUMMARY)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(agent.generatedFinalAnswer, finalEvent.summary());
+        assertFalse(finalEvent.summary().contains("下一步准备"));
     }
 
     private static final class TestableToolCallAgent extends ToolCallAgent {
+
+        private boolean finalizerCalled;
+        private String generatedFinalAnswer = "任务已结束。";
 
         private TestableToolCallAgent(ToolCallback[] availableTools) {
             super(availableTools);
@@ -117,6 +155,12 @@ class ToolCallAgentRuntimeTest {
 
         private void acceptForTest(String answer) {
             super.acceptHumanResponse(answer);
+        }
+
+        @Override
+        protected String generateFinalAnswer() {
+            this.finalizerCalled = true;
+            return this.generatedFinalAnswer;
         }
     }
 }

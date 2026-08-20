@@ -369,7 +369,8 @@ export default {
       THINKING_STARTED: 520,
       THINKING_SUMMARY: 780,
       TOOL_CALL: 820,
-      TOOL_RESULT: 650
+      TOOL_RESULT: 650,
+      FINALIZING_STARTED: 520
     }[eventType] || 140)
 
     const enqueueRunEvent = (event) => {
@@ -422,6 +423,16 @@ export default {
             expanded: true
           })
           activeRunMessage.phase = `第 ${event.step} 步分析完成`
+          break
+        case 'FINALIZING_STARTED':
+          activeRunMessage.status = 'RUNNING'
+          activeRunMessage.phase = event.summary
+          // 终止兜底路径会额外执行一次无工具的交付生成，让用户明确看到系统正在收束答案。
+          Object.assign(ensureStage(activeRunMessage, event.step), {
+            status: 'FINALIZING',
+            phase: event.summary,
+            expanded: true
+          })
           break
         case 'FINAL_SUMMARY':
           activeRunMessage.finalSummary = event.summary
@@ -646,6 +657,7 @@ export default {
       ACTING: '正在调用工具',
       RESULT: '工具已返回',
       WAITING_HUMAN: '等待人工确认',
+      FINALIZING: '正在生成最终答案',
       COMPLETED: '本阶段已完成'
     }[status] || status)
     const statusText = (status) => ({
