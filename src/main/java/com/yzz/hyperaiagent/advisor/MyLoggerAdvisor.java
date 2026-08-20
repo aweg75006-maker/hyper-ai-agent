@@ -19,12 +19,12 @@ import reactor.core.publisher.Flux;
 public class MyLoggerAdvisor implements CallAdvisor, StreamAdvisor {
 
 	@Override
-	public String getName() { 
+	public String getName() {
 		return this.getClass().getSimpleName();
 	}
 
 	@Override
-	public int getOrder() { 
+	public int getOrder() {
 		return 0;
 	}
 

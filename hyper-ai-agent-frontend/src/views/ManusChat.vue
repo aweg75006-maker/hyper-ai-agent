@@ -8,12 +8,12 @@
       </button>
       <h2>AI 超级智能体</h2>
     </div>
-    
+
     <div class="chat-messages" ref="messagesContainer">
       <div v-if="messages.length === 0" class="welcome-message">
         <p>👋 您好！我是AI超级智能体，我可以帮您解决各种问题。有什么我可以帮助您的吗？</p>
       </div>
-      
+
       <div
         v-for="(msg, index) in messages"
         :key="index"
@@ -30,7 +30,7 @@
           </div>
         </div>
       </div>
-      
+
       <div v-if="isLoading" class="message ai">
         <div class="message-content">
           <div class="message-avatar">🤖</div>
@@ -44,9 +44,35 @@
         </div>
       </div>
     </div>
-    
+
     <div class="chat-input-container">
-      <div class="chat-input-wrapper">
+      <!-- AskHuman 交互框 -->
+      <div v-if="askHumanQuestion" class="ask-human-container">
+        <div class="ask-human-question">
+          <p>🤖 AI 需要您的帮助：</p>
+          <div class="question-text" v-html="formatMessage(askHumanQuestion)"></div>
+        </div>
+        <div class="ask-human-input-wrapper">
+          <input
+            v-model="askHumanInput"
+            @keyup.enter="replyToAskHuman"
+            placeholder="请输入您的回复..."
+            class="ask-human-input"
+          />
+          <button
+            @click="replyToAskHuman"
+            class="ask-human-send-btn"
+            :disabled="!askHumanInput.trim()"
+          >
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 普通聊天输入框 -->
+      <div v-else class="chat-input-wrapper">
         <input
           v-model="inputMessage"
           @keyup.enter="sendMessage"
@@ -81,6 +107,8 @@ export default {
     const inputMessage = ref('')
     const isLoading = ref(false)
     const messagesContainer = ref(null)
+    const askHumanQuestion = ref('') // 存储 askHuman 的问题
+    const askHumanInput = ref('') // 存储用户的回复
     let eventSource = null
     let currentAiMessageIndex = null
 
@@ -145,6 +173,16 @@ export default {
           if (messages.value[currentAiMessageIndex]) {
             messages.value[currentAiMessageIndex].content += data
             scrollToBottom()
+
+            // 检查是否需要用户输入
+            if (data.includes('[需要用户输入]')) {
+              // 提取问题内容
+              const questionMatch = data.match(/\[需要用户输入\]\s*(.*)/s)
+              if (questionMatch) {
+                askHumanQuestion.value = questionMatch[1]
+                isLoading.value = false
+              }
+            }
           }
         },
         (error) => {
@@ -164,6 +202,71 @@ export default {
       )
     }
 
+    // 回复 askHuman 问题
+    const replyToAskHuman = () => {
+      if (!askHumanInput.value.trim()) {
+        return
+      }
+
+      const userReply = askHumanInput.value.trim()
+      askHumanInput.value = ''
+      askHumanQuestion.value = ''
+
+      // 将用户的回复作为新消息发送
+      isLoading.value = true
+
+      // 添加用户消息
+      messages.value.push({
+        type: 'user',
+        content: userReply,
+        time: new Date()
+      })
+
+      scrollToBottom()
+
+      // 添加AI消息占位符
+      currentAiMessageIndex = messages.value.length
+      messages.value.push({
+        type: 'ai',
+        content: '',
+        time: new Date()
+      })
+
+      scrollToBottom()
+
+      // 继续调用SSE接口
+      eventSource = chatWithManus(
+        userReply,
+        (data) => {
+          if (messages.value[currentAiMessageIndex]) {
+            messages.value[currentAiMessageIndex].content += data
+            scrollToBottom()
+
+            // 检查是否需要用户输入
+            if (data.includes('[需要用户输入]')) {
+              const questionMatch = data.match(/\[需要用户输入\]\s*(.*)/s)
+              if (questionMatch) {
+                askHumanQuestion.value = questionMatch[1]
+                isLoading.value = false
+              }
+            }
+          }
+        },
+        (error) => {
+          console.error('Error:', error)
+          isLoading.value = false
+          if (messages.value[currentAiMessageIndex]) {
+            messages.value[currentAiMessageIndex].content += '\n\n[连接错误，请重试]'
+          }
+          eventSource = null
+        },
+        () => {
+          isLoading.value = false
+          eventSource = null
+        }
+      )
+    }
+
     const goBack = () => {
       if (eventSource) {
         eventSource.close()
@@ -176,7 +279,10 @@ export default {
       inputMessage,
       isLoading,
       messagesContainer,
+      askHumanQuestion,
+      askHumanInput,
       sendMessage,
+      replyToAskHuman,
       goBack,
       formatMessage,
       formatTime
@@ -399,6 +505,83 @@ export default {
 }
 
 .send-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* AskHuman 样式 */
+.ask-human-container {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 10px;
+}
+
+.ask-human-question {
+  margin-bottom: 12px;
+}
+
+.ask-human-question p {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+  color: #856404;
+}
+
+.question-text {
+  background: white;
+  padding: 12px;
+  border-radius: 8px;
+  border-left: 3px solid #ffc107;
+  color: #333;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.ask-human-input-wrapper {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.ask-human-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #ffc107;
+  border-radius: 24px;
+  font-size: 1em;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.ask-human-input:focus {
+  border-color: #f5576c;
+}
+
+.ask-human-send-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.ask-human-send-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.ask-human-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ask-human-send-btn svg {
   width: 20px;
   height: 20px;
 }

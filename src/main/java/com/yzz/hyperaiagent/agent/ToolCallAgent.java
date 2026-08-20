@@ -98,21 +98,31 @@ public class ToolCallAgent extends ReActAgent {
             return "没有工具需要调用";
         }
         Prompt prompt = new Prompt(getMessageList(), this.chatOptions);
-        ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, toolCallChatResponse);
 
-        setMessageList(toolExecutionResult.conversationHistory());
-        ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
+        try {
+            ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, toolCallChatResponse);
+            setMessageList(toolExecutionResult.conversationHistory());
+            ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
 
-        boolean terminateToolCalled = toolResponseMessage.getResponses().stream()
-                .anyMatch(response -> response.name().equals("doTerminate"));
-        if (terminateToolCalled) {
-            setState(AgentState.FINISHED);
+            boolean terminateToolCalled = toolResponseMessage.getResponses().stream()
+                    .anyMatch(response -> response.name().equals("doTerminate"));
+            if (terminateToolCalled) {
+                setState(AgentState.FINISHED);
+            }
+
+            String results = toolResponseMessage.getResponses().stream()
+                    .map(response -> "工具 " + response.name() + " 返回的结果：" + response.responseData())
+                    .collect(Collectors.joining("\n"));
+            log.info(results);
+            return results;
+        } catch (Exception e) {
+            // 捕获 AskHumanRequestException 并返回给用户
+            if (e instanceof AskHumanRequestException askHumanEx) {
+                log.info("Agent 需要用户输入: {}", askHumanEx.getQuestion());
+                return "[需要用户输入] " + askHumanEx.getQuestion();
+            }
+            log.error("工具执行失败: {}", e.getMessage());
+            return "工具执行失败: " + e.getMessage();
         }
-
-        String results = toolResponseMessage.getResponses().stream()
-                .map(response -> "工具 " + response.name() + " 返回的结果：" + response.responseData())
-                .collect(Collectors.joining("\n"));
-        log.info(results);
-        return results;
     }
 }

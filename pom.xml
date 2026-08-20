@@ -137,6 +137,20 @@
             <version>1.19.1</version>
         </dependency>
 
+        <!-- PDF rendering (for OCR pipeline) -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.4</version>
+        </dependency>
+
+        <!-- OCR engine wrapper (requires Tesseract installed at runtime when enabled) -->
+        <dependency>
+            <groupId>net.sourceforge.tess4j</groupId>
+            <artifactId>tess4j</artifactId>
+            <version>5.13.0</version>
+        </dependency>
+
 <!--        <dependency>-->
 <!--            <groupId>org.seleniumhq.selenium</groupId>-->
 <!--            <artifactId>selenium-java</artifactId>-->

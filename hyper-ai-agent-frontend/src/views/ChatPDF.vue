@@ -11,10 +11,10 @@
           新会话
         </button>
       </div>
-      
+
       <div class="chat-history-list">
-        <div 
-          v-for="chatId in chatHistoryIds" 
+        <div
+          v-for="chatId in chatHistoryIds"
           :key="chatId"
           :class="['chat-history-item', { active: currentChatId === chatId }]"
           @click="loadChatHistory(chatId)"
@@ -29,14 +29,14 @@
         </div>
       </div>
     </div>
-    
+
     <!-- 主区域 -->
     <div class="main-content">
       <div class="content-header">
         <h2>ChatPDF</h2>
         <div class="chat-id">会话ID: {{ currentChatId }}</div>
       </div>
-      
+
       <div class="content-body">
         <!-- PDF预览区域 -->
         <div class="pdf-section">
@@ -47,9 +47,9 @@
               <span class="pdf-page-info" v-if="pdfPage > 0">第 {{ pdfPage }} 页 / 共 {{ totalPages }} 页</span>
             </div>
           </div>
-          
-          <div 
-            class="pdf-upload-area" 
+
+          <div
+            class="pdf-upload-area"
             v-if="!pdfFile"
             @drop="handleFileDrop"
             @dragover.prevent
@@ -61,9 +61,9 @@
               </svg>
             </div>
             <p>拖拽PDF文件到此处，或</p>
-            <input 
-              type="file" 
-              accept=".pdf" 
+            <input
+              type="file"
+              accept=".pdf"
               @change="handleFileSelect"
               class="file-input"
               id="file-upload"
@@ -73,7 +73,7 @@
             </label>
             <p class="upload-hint">支持 PDF 格式，最大 50MB</p>
           </div>
-          
+
           <div class="pdf-preview" v-else>
             <div v-if="totalPages === 0" class="pdf-loading">
               <div class="loading-spinner"></div>
@@ -96,7 +96,7 @@
             <div v-if="messages.length === 0" class="welcome-message">
               <p>👋 您好！上传PDF文档后，我可以帮您分析和回答相关问题。</p>
             </div>
-            
+
             <div
               v-for="(msg, index) in messages"
               :key="index"
@@ -113,7 +113,7 @@
                 </div>
               </div>
             </div>
-            
+
             <div v-if="isLoading" class="message ai">
               <div class="message-content">
                 <div class="message-avatar">🤖</div>
@@ -127,7 +127,7 @@
               </div>
             </div>
           </div>
-          
+
           <div class="chat-input-container">
             <div class="chat-input-wrapper">
               <input
@@ -214,18 +214,18 @@ export default {
     const loadChatHistory = async (chatId) => {
       currentChatId.value = chatId
       const history = await getChatHistory('pdf', chatId)
-      
+
       // 转换历史记录格式
       messages.value = history.map(msg => ({
         type: msg.role === 'user' ? 'user' : 'ai',
         content: msg.content,
         time: new Date(msg.timestamp)
       }))
-      
+
       // 加载对应会话的PDF
       pdfUrl.value = `http://localhost:8123/api/ai/pdf/file/${currentChatId.value}`
       console.log('Loading PDF for chatId:', chatId, 'PDF URL:', pdfUrl.value)
-      
+
       // 延迟尝试加载PDF，确保有足够时间
       setTimeout(async () => {
         try {
@@ -239,7 +239,7 @@ export default {
           pdfDocument = null
         }
       }, 1000)
-      
+
       nextTick(() => {
         scrollToBottom()
       })
@@ -292,30 +292,30 @@ export default {
         alert('请上传PDF文件！')
         return
       }
-      
+
       if (file.size > 50 * 1024 * 1024) {
         alert('文件大小不能超过50MB！')
         return
       }
-      
+
       try {
         // 上传文件
         console.log('Starting to upload file:', file.name, 'size:', file.size)
         const result = await uploadPdf(currentChatId.value, file)
         console.log('Upload result:', result)
-        
+
         // 处理后端返回的各种格式
         if (result === 'ok' || result.code === 200 || result === true || !result.code || result.msg === 'ok') {
           pdfFile.value = file
           // 设置PDF预览URL
           pdfUrl.value = `http://localhost:8123/api/ai/pdf/file/${currentChatId.value}`
           console.log('PDF URL:', pdfUrl.value)
-          
+
           // 测试PDF URL是否可访问
           setTimeout(async () => {
             try {
               // 使用GET请求代替HEAD请求，确保测试更加可靠
-              const testResponse = await fetch(pdfUrl.value, { 
+              const testResponse = await fetch(pdfUrl.value, {
                 method: 'GET',
                 headers: {
                   'Range': 'bytes=0-1023' // 只请求文件的前1024字节，减少网络流量
@@ -354,16 +354,16 @@ export default {
     const loadPdf = async () => {
       try {
         console.log('Starting to load PDF from:', pdfUrl.value)
-        
+
         // 重置PDF状态
         totalPages.value = 0
         pdfPage.value = 0
         pdfDocument = null
-        
+
         // 测试URL是否可访问
         try {
           // 使用GET请求代替HEAD请求，确保测试更加可靠
-          const response = await fetch(pdfUrl.value, { 
+          const response = await fetch(pdfUrl.value, {
             method: 'GET',
             headers: {
               'Range': 'bytes=0-1023' // 只请求文件的前1024字节，减少网络流量
@@ -371,7 +371,7 @@ export default {
             signal: AbortSignal.timeout(10000) // 添加10秒超时
           })
           console.log('PDF URL status:', response.status)
-          
+
           if (!response.ok && response.status !== 206) { // 206 Partial Content也是成功
             throw new Error(`PDF URL returned status: ${response.status}`)
           }
@@ -379,7 +379,7 @@ export default {
           console.error('Fetch error:', fetchError)
           throw new Error('无法连接到PDF服务器，请检查网络连接')
         }
-        
+
         // 从URL加载PDF
         const loadingTask = pdfjsLib.getDocument({
           url: pdfUrl.value,
@@ -388,21 +388,21 @@ export default {
           disableFontFace: true,
           renderInteractiveForms: false
         })
-        
+
         // 添加超时处理
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => reject(new Error('PDF加载超时')), 30000)
         })
-        
+
         pdfDocument = await Promise.race([loadingTask.promise, timeoutPromise])
         totalPages.value = pdfDocument.numPages
         pdfPage.value = 1
-        
+
         console.log('PDF loaded successfully. Total pages:', totalPages.value)
-        
+
         // 渲染第一页
         await renderPage(pdfPage.value)
-        
+
         // 标记PDF文件已加载
         if (pdfFile.value && typeof pdfFile.value.name === 'string' && !pdfFile.value.name.includes('(')) {
           pdfFile.value = { name: `${pdfFile.value.name} (${totalPages.value} pages)` }
@@ -421,35 +421,35 @@ export default {
     const renderPage = async (pageNum) => {
       try {
         console.log('Rendering page:', pageNum)
-        
+
         const page = await pdfDocument.getPage(pageNum)
         const viewport = page.getViewport({ scale: 1.0 })
-        
+
         // 等待DOM更新，确保canvas元素已创建
         await nextTick()
-        
+
         // 设置canvas尺寸
         const canvas = pdfCanvases.value[pageNum - 1]
         if (!canvas) {
           console.error('Canvas element not found for page:', pageNum)
           return
         }
-        
+
         const context = canvas.getContext('2d')
         canvas.height = viewport.height
         canvas.width = viewport.width
-        
+
         // 渲染页面
         const renderContext = {
           canvasContext: context,
           viewport: viewport
         }
-        
+
         console.log('Rendering page', pageNum, 'to canvas with dimensions:', canvas.width, 'x', canvas.height)
         await page.render(renderContext).promise
-        
+
         console.log('Page', pageNum, 'rendered successfully')
-        
+
         // 滚动到当前页面
         if (pdfContainer.value) {
           pdfContainer.value.scrollTop = (pageNum - 1) * viewport.height
@@ -1119,12 +1119,12 @@ export default {
   .content-body {
     flex-direction: column;
   }
-  
+
   .pdf-section,
   .chat-section {
     min-width: auto;
   }
-  
+
   .pdf-section {
     max-height: 50vh;
   }
@@ -1134,24 +1134,24 @@ export default {
   .sidebar {
     width: 240px;
   }
-  
+
   .content-header {
     padding: 15px 20px;
   }
-  
+
   .content-body {
     padding: 10px;
     gap: 10px;
   }
-  
+
   .pdf-header {
     padding: 10px 15px;
   }
-  
+
   .chat-messages {
     padding: 15px;
   }
-  
+
   .chat-input-container {
     padding: 10px 15px;
   }

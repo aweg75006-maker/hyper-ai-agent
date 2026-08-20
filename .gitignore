@@ -1,19 +1,30 @@
-### CUSTOM ###
+### Local configuration and secrets ###
+.env
+.env.*
+!.env.example
 application-local.yml
 src/main/resources/mcp-servers.json
-tmp
-src/main/resources/document
-src/main/resources/document2
-src/main/java/com/yzz/hyperaiagent/demo/invoke/TestApiKey.java
-HELP.md
-document
-pdf-files
-AskHumanTool使用说明.md
+
+### Runtime data ###
+pdf-files/
+storage/
+tmp/
+src/main/resources/document/
+
+### Markdown documentation ###
+*.md
+!docs/README.md
+
+### Build output ###
 target/
+*.class
+*.jar
+*.war
 .mvn/wrapper/maven-wrapper.jar
-TestApiKey.java
-!**/src/main/**/target/
-!**/src/test/**/target/
+
+### Operating system ###
+.DS_Store
+Thumbs.db
 
 ### STS ###
 .apt_generated
@@ -25,7 +36,7 @@ TestApiKey.java
 .sts4-cache
 
 ### IntelliJ IDEA ###
-.idea
+.idea/
 *.iws
 *.iml
 *.ipr

@@ -12,24 +12,24 @@ const API_BASE_URL = 'http://localhost:8123/api'
  */
 export function chatWithPsyAppSse(message, chatId, onMessage, onError, onClose) {
   const url = `${API_BASE_URL}/ai/psy_app/chat/sse?message=${encodeURIComponent(message)}&chatId=${encodeURIComponent(chatId)}`
-  
+
   const eventSource = new EventSource(url)
   let hasReceivedData = false
   let isHandled = false
-  
+
   eventSource.onmessage = (event) => {
     if (event.data) {
       hasReceivedData = true
       onMessage(event.data)
     }
   }
-  
+
   eventSource.onerror = (error) => {
     // 确保只处理一次
     if (isHandled) {
       return
     }
-    
+
     // 如果已经接收到数据，认为连接是正常关闭的
     // EventSource 在正常关闭时也会触发 onerror 事件
     if (hasReceivedData) {
@@ -43,7 +43,7 @@ export function chatWithPsyAppSse(message, chatId, onMessage, onError, onClose) 
       }, 100)
       return
     }
-    
+
     // 如果没有接收到任何数据就出错，才是真正的错误
     isHandled = true
     console.error('SSE Error:', error)
@@ -52,7 +52,7 @@ export function chatWithPsyAppSse(message, chatId, onMessage, onError, onClose) 
       onError(error)
     }
   }
-  
+
   return eventSource
 }
 
@@ -65,24 +65,24 @@ export function chatWithPsyAppSse(message, chatId, onMessage, onError, onClose) 
  */
 export function chatWithManus(message, onMessage, onError, onClose) {
   const url = `${API_BASE_URL}/ai/manus/chat?message=${encodeURIComponent(message)}`
-  
+
   const eventSource = new EventSource(url)
   let hasReceivedData = false
   let isHandled = false
-  
+
   eventSource.onmessage = (event) => {
     if (event.data) {
       hasReceivedData = true
       onMessage(event.data)
     }
   }
-  
+
   eventSource.onerror = (error) => {
     // 确保只处理一次
     if (isHandled) {
       return
     }
-    
+
     // 如果已经接收到数据，认为连接是正常关闭的
     // EventSource 在正常关闭时也会触发 onerror 事件
     if (hasReceivedData) {
@@ -96,7 +96,7 @@ export function chatWithManus(message, onMessage, onError, onClose) {
       }, 100)
       return
     }
-    
+
     // 如果没有接收到任何数据就出错，才是真正的错误
     isHandled = true
     console.error('SSE Error:', error)
@@ -105,7 +105,7 @@ export function chatWithManus(message, onMessage, onError, onClose) {
       onError(error)
     }
   }
-  
+
   return eventSource
 }
 
@@ -119,11 +119,11 @@ export function chatWithManus(message, onMessage, onError, onClose) {
  */
 export function chatWithAssistant(message, chatId, onMessage, onError, onClose) {
   const url = `${API_BASE_URL}/ai/chat?prompt=${encodeURIComponent(message)}&chatId=${encodeURIComponent(chatId)}`
-  
+
   let controller = new AbortController()
   let signal = controller.signal
   let isClosed = false
-  
+
   fetch(url, {
     method: 'GET',
     signal: signal
@@ -132,11 +132,11 @@ export function chatWithAssistant(message, chatId, onMessage, onError, onClose) 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
-    
+
     const reader = response.body.getReader()
     const decoder = new TextDecoder('utf-8')
     let hasReceivedData = false
-    
+
     function read() {
       return reader.read().then(({ done, value }) => {
         if (done) {
@@ -148,17 +148,17 @@ export function chatWithAssistant(message, chatId, onMessage, onError, onClose) 
           }
           return
         }
-        
+
         const chunk = decoder.decode(value, { stream: true })
         if (chunk) {
           hasReceivedData = true
           onMessage(chunk)
         }
-        
+
         return read()
       })
     }
-    
+
     return read()
   })
   .catch(error => {
@@ -170,7 +170,7 @@ export function chatWithAssistant(message, chatId, onMessage, onError, onClose) 
       }
     }
   })
-  
+
   // 返回一个对象，包含关闭方法
   return {
     close: () => {
@@ -230,11 +230,11 @@ export function generateChatId() {
  */
 export function chatWithPdf(message, chatId, onMessage, onError, onClose) {
   const url = `${API_BASE_URL}/ai/pdf/chat?prompt=${encodeURIComponent(message)}&chatId=${encodeURIComponent(chatId)}`
-  
+
   let controller = new AbortController()
   let signal = controller.signal
   let isClosed = false
-  
+
   fetch(url, {
     method: 'GET',
     signal: signal
@@ -243,11 +243,11 @@ export function chatWithPdf(message, chatId, onMessage, onError, onClose) {
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
-    
+
     const reader = response.body.getReader()
     const decoder = new TextDecoder('utf-8')
     let hasReceivedData = false
-    
+
     function read() {
       return reader.read().then(({ done, value }) => {
         if (done) {
@@ -259,17 +259,17 @@ export function chatWithPdf(message, chatId, onMessage, onError, onClose) {
           }
           return
         }
-        
+
         const chunk = decoder.decode(value, { stream: true })
         if (chunk) {
           hasReceivedData = true
           onMessage(chunk)
         }
-        
+
         return read()
       })
     }
-    
+
     return read()
   })
   .catch(error => {
@@ -281,7 +281,7 @@ export function chatWithPdf(message, chatId, onMessage, onError, onClose) {
       }
     }
   })
-  
+
   // 返回一个对象，包含关闭方法
   return {
     close: () => {
@@ -302,7 +302,7 @@ export function chatWithPdf(message, chatId, onMessage, onError, onClose) {
 export async function uploadPdf(chatId, file) {
   const formData = new FormData()
   formData.append('file', file)
-  
+
   try {
     const response = await axios.post(`${API_BASE_URL}/ai/pdf/upload/${chatId}`, formData, {
       headers: {

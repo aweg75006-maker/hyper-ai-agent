@@ -4,7 +4,7 @@
       <h1>Hyper AI Agent</h1>
       <p class="subtitle">选择您想要使用的AI应用</p>
     </div>
-    
+
     <div class="apps-grid">
       <div class="app-card" @click="goToPsychology">
         <div class="app-icon psychology-icon">
@@ -16,7 +16,7 @@
         <h2>AI 心理咨询大师</h2>
         <p>专业的AI心理咨询服务，为您提供心理支持和指导</p>
       </div>
-      
+
       <div class="app-card" @click="goToManus">
         <div class="app-icon manus-icon">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -26,7 +26,7 @@
         <h2>AI 超级智能体</h2>
         <p>强大的AI智能助手，帮您解决各种问题</p>
       </div>
-      
+
       <div class="app-card" @click="goToAssistant">
         <div class="app-icon assistant-icon">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -36,7 +36,7 @@
         <h2>AI 聊天助手</h2>
         <p>智能聊天助手，支持多会话管理和历史记录持久化</p>
       </div>
-      
+
       <div class="app-card" @click="goToPDF">
         <div class="app-icon pdf-icon">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -174,7 +174,7 @@ export default {
   .header h1 {
     font-size: 2.5em;
   }
-  
+
   .apps-grid {
     grid-template-columns: 1fr;
   }

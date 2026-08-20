@@ -36,7 +36,7 @@ public class WebSearchTool {
         try {
             String response = HttpUtil.get(SEARCH_API_URL, paramMap);
             // 取出返回结果的前 5 条
-            JSONObject jsonObject = JSONUtil.parseObj(response);
+            JSONObject jsonObject = JSONUtil.parseObj(response); // 解析API返回的JSON数据
             // 提取 organic_results 部分
             JSONArray organicResults = jsonObject.getJSONArray("organic_results");
             List<Object> objects = organicResults.subList(0, 5);

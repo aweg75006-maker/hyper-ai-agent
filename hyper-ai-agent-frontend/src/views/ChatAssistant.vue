@@ -11,10 +11,10 @@
           新会话
         </button>
       </div>
-      
+
       <div class="chat-history-list">
-        <div 
-          v-for="chatId in chatHistoryIds" 
+        <div
+          v-for="chatId in chatHistoryIds"
           :key="chatId"
           :class="['chat-history-item', { active: currentChatId === chatId }]"
           @click="loadChatHistory(chatId)"
@@ -29,19 +29,19 @@
         </div>
       </div>
     </div>
-    
+
     <!-- 主聊天区域 -->
     <div class="chat-main">
       <div class="chat-header">
         <h2>AI聊天助手</h2>
         <div class="chat-id">会话ID: {{ currentChatId }}</div>
       </div>
-      
+
       <div class="chat-messages" ref="messagesContainer">
         <div v-if="messages.length === 0" class="welcome-message">
           <p>👋 您好！我是AI聊天助手，很高兴为您服务。有什么我可以帮助您的吗？</p>
         </div>
-        
+
         <div
           v-for="(msg, index) in messages"
           :key="index"
@@ -58,7 +58,7 @@
             </div>
           </div>
         </div>
-        
+
         <div v-if="isLoading" class="message ai">
           <div class="message-content">
             <div class="message-avatar">🤖</div>
@@ -72,7 +72,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="chat-input-container">
         <div class="chat-input-wrapper">
           <input
@@ -141,14 +141,14 @@ export default {
     const loadChatHistory = async (chatId) => {
       currentChatId.value = chatId
       const history = await getChatHistory('chat', chatId)
-      
+
       // 转换历史记录格式
       messages.value = history.map(msg => ({
         type: msg.role === 'user' ? 'user' : 'ai',
         content: msg.content,
         time: new Date(msg.timestamp)
       }))
-      
+
       nextTick(() => {
         scrollToBottom()
       })
@@ -595,15 +595,15 @@ export default {
   .sidebar {
     width: 240px;
   }
-  
+
   .chat-messages {
     padding: 20px;
   }
-  
+
   .message-content {
     max-width: 85%;
   }
-  
+
   .chat-input-wrapper {
     padding: 0 10px;
   }

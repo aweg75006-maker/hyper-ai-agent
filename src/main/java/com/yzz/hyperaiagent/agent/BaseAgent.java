@@ -132,6 +132,14 @@ public abstract class BaseAgent {
                     results.add(result);
                     // 输出当前每一步的结果到 SSE
                     sseEmitter.send(result);
+
+                    // 检查是否需要用户输入
+                    if (stepResult.contains("[需要用户输入]")) {
+                        log.info("Agent 需要用户输入，等待用户回复");
+                        // 不结束循环，但暂停等待用户回复
+                        // 通过抛出特殊标记来中断，等待下次请求
+                        break;
+                    }
                 }
                 // 检查是否超出步骤限制
                 if (currentStep >= maxSteps) {

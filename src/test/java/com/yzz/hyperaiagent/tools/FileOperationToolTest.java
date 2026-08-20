@@ -2,12 +2,7 @@ package com.yzz.hyperaiagent.tools;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-/**
- * 如果需要加载配置文件就需要@Springboot
- */
-@SpringBootTest
 class FileOperationToolTest {
 
     @Test

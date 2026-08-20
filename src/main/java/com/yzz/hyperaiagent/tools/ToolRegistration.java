@@ -1,5 +1,6 @@
 package com.yzz.hyperaiagent.tools;
 
+import com.yzz.hyperaiagent.tools.sandbox.SandboxedCommandExecutor;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbacks;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,10 +22,11 @@ public class ToolRegistration {
         WebSearchTool webSearchTool = new WebSearchTool(searchApiKey);
         WebScrapingTool webScrapingTool = new WebScrapingTool();
         ResourceDownloadTool resourceDownloadTool = new ResourceDownloadTool();
-        TerminalOperationTool terminalOperationTool = new TerminalOperationTool();
+        TerminalOperationTool terminalOperationTool = new TerminalOperationTool(new SandboxedCommandExecutor());
         PDFGenerationTool pdfGenerationTool = new PDFGenerationTool();
         TerminateTool terminateTool = new TerminateTool();
-        AskHumanTool askHumanTool = new AskHumanTool();
+        // 暂时禁用 askHuman 工具,避免 Agent 陷入死循环
+        // AskHumanTool askHumanTool = new AskHumanTool();
         return ToolCallbacks.from(
                 fileOperationTool,
                 webSearchTool,
@@ -32,8 +34,8 @@ public class ToolRegistration {
                 resourceDownloadTool,
                 terminalOperationTool,
                 pdfGenerationTool,
-                terminateTool,
-                askHumanTool
+                terminateTool
+                // askHumanTool
         );
     }
 

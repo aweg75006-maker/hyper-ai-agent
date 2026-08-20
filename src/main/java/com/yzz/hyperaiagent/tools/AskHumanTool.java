@@ -1,21 +1,19 @@
 package com.yzz.hyperaiagent.tools;
 
+import com.yzz.hyperaiagent.agent.AskHumanRequestException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
-import java.util.Scanner;
-
 /**
  * 向人类寻求帮助的工具
- * 当AI无法独立完成某些任务时，可以通过此工具向用户询问信息
+ * 当AI无法独立完成某些任务时,可以通过此工具向用户询问信息
+ * 注意:在Web环境下,此工具会抛出异常将问题推送给前端,而不是阻塞等待
  */
 @Slf4j
 @Component
 public class AskHumanTool {
-
-    private static final Scanner scanner = new Scanner(System.in);
 
     /**
      * 向用户提问并获取回答
@@ -37,16 +35,8 @@ public class AskHumanTool {
 
         log.info("AI is asking for human help: {}", question);
 
-        try {
-            String userAnswer = scanner.nextLine();
-
-            log.info("User provided answer: {}", userAnswer);
-
-            return "User answered: " + userAnswer;
-        } catch (Exception e) {
-            log.error("Error reading user input", e);
-            return "Error reading user input: " + e.getMessage();
-        }
+        // 在 Web 环境下,抛出异常将问题推送给前端
+        throw new AskHumanRequestException(question);
     }
 
     /**
@@ -64,20 +54,8 @@ public class AskHumanTool {
 
         log.info("AI requesting confirmation for: {}", action);
 
-        try {
-            String userAnswer = scanner.nextLine().trim().toLowerCase();
-
-            log.info("User confirmation: {}", userAnswer);
-
-            if (userAnswer.equals("yes") || userAnswer.equals("y")) {
-                return "User confirmed: yes";
-            } else {
-                return "User declined: " + userAnswer;
-            }
-        } catch (Exception e) {
-            log.error("Error reading user input", e);
-            return "Error reading user input: " + e.getMessage();
-        }
+        // 在 Web 环境下,抛出异常将问题推送给前端
+        throw new AskHumanRequestException("请确认以下操作: " + action);
     }
 
     /**
@@ -97,27 +75,7 @@ public class AskHumanTool {
 
         log.info("AI presenting options to user: {}", question);
 
-        String[] optionArray = options.split(",");
-//        for (int i = 0; i < optionArray.length; i++) {
-//            System.out.println((i + 1) + ". " + optionArray[i].trim());
-//        }
-
-        try {
-            String userAnswer = scanner.nextLine().trim();
-
-            log.info("User selected option: {}", userAnswer);
-
-            int selectedIndex = Integer.parseInt(userAnswer) - 1;
-            if (selectedIndex >= 0 && selectedIndex < optionArray.length) {
-                return "User selected: " + optionArray[selectedIndex].trim();
-            } else {
-                return "Invalid selection. User entered: " + userAnswer;
-            }
-        } catch (NumberFormatException e) {
-            return "Invalid input format. Please enter a number between 1 and " + optionArray.length;
-        } catch (Exception e) {
-            log.error("Error reading user input", e);
-            return "Error reading user input: " + e.getMessage();
-        }
+        // 在 Web 环境下,抛出异常将问题推送给前端
+        throw new AskHumanRequestException(question + "\n可选选项: " + options);
     }
 }

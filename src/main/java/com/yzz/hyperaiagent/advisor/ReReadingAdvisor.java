@@ -50,7 +50,7 @@ public class ReReadingAdvisor implements BaseAdvisor {
 	}
 
 	@Override
-	public int getOrder() { 
+	public int getOrder() {
 		return this.order;
 	}
 

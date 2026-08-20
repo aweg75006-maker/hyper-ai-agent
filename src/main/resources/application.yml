@@ -1,6 +1,9 @@
 spring:
   application:
     name: hyper-ai-agent
+  config:
+    # Load local credentials from the project-root .env file when present.
+    import: optional:file:./.env[.properties]
   profiles:
     active: local
 #  ai:

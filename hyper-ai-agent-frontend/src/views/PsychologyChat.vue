@@ -9,12 +9,12 @@
       <h2>AI 心理咨询大师</h2>
       <div class="chat-id">会话ID: {{ chatId }}</div>
     </div>
-    
+
     <div class="chat-messages" ref="messagesContainer">
       <div v-if="messages.length === 0" class="welcome-message">
         <p>👋 您好！我是AI心理咨询大师，很高兴为您服务。有什么我可以帮助您的吗？</p>
       </div>
-      
+
       <div
         v-for="(msg, index) in messages"
         :key="index"
@@ -31,7 +31,7 @@
           </div>
         </div>
       </div>
-      
+
       <div v-if="isLoading" class="message ai">
         <div class="message-content">
           <div class="message-avatar">🤖</div>
@@ -45,7 +45,7 @@
         </div>
       </div>
     </div>
-    
+
     <div class="chat-input-container">
       <div class="chat-input-wrapper">
         <input
