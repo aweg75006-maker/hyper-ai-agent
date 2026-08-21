@@ -13,7 +13,7 @@ src/main/resources/document/
 
 ### Markdown documentation ###
 *.md
-!docs/README.md
+!/README.md
 
 ### Build output ###
 target/
